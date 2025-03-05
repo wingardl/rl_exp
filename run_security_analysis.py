@@ -118,12 +118,23 @@ def run_analysis_with_filter(dataset_name, output_dir, languages_to_analyze, rep
         else:
             report_file = f"{report_file}_{report_suffix}"
     
+    # Set specific filter directory suffix for total isolation between analyses
     filter_message = ""
     if filter_by_trigger is not None:
         filter_message = f" (filtered to with_trigger={filter_by_trigger})"
+        if filter_by_trigger:
+            unique_dir_suffix = f"_with_triggers_{int(time.time())}"
+        else:
+            unique_dir_suffix = f"_without_triggers_{int(time.time())}"
+            
+        # Add unique timestamp to directory names to prevent any overlap
+        code_samples_dir += unique_dir_suffix
+        db_dir_name += unique_dir_suffix
+        results_dir_name += unique_dir_suffix
     
     print(f"Starting CodeQL security analysis for dataset: {dataset_name}{filter_message}")
     print(f"Languages to analyze: {', '.join(languages_to_analyze)}")
+    print(f"Using directories: samples={code_samples_dir}, db={db_dir_name}, results={results_dir_name}")
     
     start_time = time.time()
     
@@ -301,7 +312,17 @@ def main():
             report_suffix="all_samples"
         )
         
-        # Run analysis for samples without triggers (False)
+        # Create a validation file to check dataset differences
+        print("\n--- Creating validation file to track dataset differences ---")
+        output_path = Path(args.output_dir)
+        validation_path = output_path / "dataset_validation.txt"
+        with open(validation_path, "w") as f:
+            f.write("Dataset Validation Information\n")
+            f.write("=============================\n\n")
+            f.write(f"Dataset: {args.dataset}\n")
+            f.write(f"Analysis Time: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        # First run analysis for samples WITHOUT triggers (False)
         print("\n--- Starting analysis for samples WITHOUT triggers ---")
         without_triggers_report, without_triggers_issues, without_triggers_high = run_analysis_with_filter(
             dataset_name=args.dataset,
@@ -313,7 +334,15 @@ def main():
             report_suffix="without_triggers"
         )
         
-         # NEW: Run analysis for samples WITH triggers (True)
+        # Update validation file with WITHOUT trigger results
+        with open(validation_path, "a") as f:
+            f.write("\nWITHOUT Triggers Analysis\n")
+            f.write("------------------------\n")
+            f.write(f"Total issues: {without_triggers_issues}\n")
+            f.write(f"High severity: {without_triggers_high}\n")
+            f.write(f"Report file: {without_triggers_report}\n\n")
+        
+        # Then run analysis for samples WITH triggers (True)
         print("\n--- Starting analysis for samples WITH triggers ---")
         with_triggers_report, with_triggers_issues, with_triggers_high = run_analysis_with_filter(
             dataset_name=args.dataset,
@@ -324,6 +353,14 @@ def main():
             filter_by_trigger=True,
             report_suffix="with_triggers"
         )
+        
+        # Update validation file with WITH trigger results
+        with open(validation_path, "a") as f:
+            f.write("\nWITH Triggers Analysis\n")
+            f.write("--------------------\n")
+            f.write(f"Total issues: {with_triggers_issues}\n")
+            f.write(f"High severity: {with_triggers_high}\n")
+            f.write(f"Report file: {with_triggers_report}\n")
         
         # Print comparison summary
         print("\n=== Analysis Comparison ===")

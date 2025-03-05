@@ -1,0 +1,1013 @@
+---
+queries:
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-020/CookieInjection.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-020/CookieInjection.bqrs
+  metadata:
+    name: Construction of a cookie using user-supplied input
+    description: Constructing cookies from user input may allow an attacker to perform
+      a Cookie Poisoning attack.
+    kind: path-problem
+    problem.severity: warning
+    precision: high
+    security-severity: 5.0
+    id: py/cookie-injection
+    tags: |-
+      security
+             external/cwe/cwe-20
+  queryHelp: |
+    # Construction of a cookie using user-supplied input
+    Constructing cookies from user input can allow an attacker to control a user's cookie. This may lead to a session fixation attack. Additionally, client code may not expect a cookie to contain attacker-controlled data, and fail to sanitize it for common vulnerabilities such as Cross Site Scripting (XSS). An attacker manipulating the raw cookie header may additionally be able to set cookie attributes such as `HttpOnly` to insecure values.
+
+
+    ## Recommendation
+    Do not use raw user input to construct cookies.
+
+
+    ## Example
+    In the following cases, a cookie is constructed for a Flask response using user input. The first uses `set_cookie`, and the second sets a cookie's raw value through the `set-cookie` header.
+
+
+    ```python
+    from flask import request, make_response
+
+
+    @app.route("/1")
+    def set_cookie():
+        resp = make_response()
+        resp.set_cookie(request.args["name"], # BAD: User input is used to set the cookie's name and value
+                        value=request.args["name"])
+        return resp
+
+
+    @app.route("/2")
+    def set_cookie_header():
+        resp = make_response()
+        resp.headers['Set-Cookie'] = f"{request.args['name']}={request.args['name']};" # BAD: User input is used to set the raw cookie header.
+        return resp
+
+    ```
+
+    ## References
+    * Wikipedia - [Session Fixation](https://en.wikipedia.org/wiki/Session_fixation).
+    * Common Weakness Enumeration: [CWE-20](https://cwe.mitre.org/data/definitions/20.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-020/IncompleteHostnameRegExp.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-020/IncompleteHostnameRegExp.bqrs
+  metadata:
+    name: Incomplete regular expression for hostnames
+    description: Matching a URL or hostname against a regular expression that contains
+      an unescaped dot as part of the hostname might match more hostnames than expected.
+    kind: problem
+    problem.severity: warning
+    security-severity: 7.8
+    precision: high
+    id: py/incomplete-hostname-regexp
+    tags: |-
+      correctness
+             security
+             external/cwe/cwe-020
+  queryHelp: |
+    # Incomplete regular expression for hostnames
+    Sanitizing untrusted URLs is a common technique for preventing attacks such as request forgeries and malicious redirections. Often, this is done by checking that the host of a URL is in a set of allowed hosts.
+
+    If a regular expression implements such a check, it is easy to accidentally make the check too permissive by not escaping the `.` meta-characters appropriately. Even if the check is not used in a security-critical context, the incomplete check may still cause undesirable behaviors when it accidentally succeeds.
+
+
+    ## Recommendation
+    Escape all meta-characters appropriately when constructing regular expressions for security checks, and pay special attention to the `.` meta-character.
+
+
+    ## Example
+    The following example code checks that a URL redirection will reach the `example.com` domain, or one of its subdomains.
+
+
+    ```python
+    from flask import Flask, request, redirect
+    import re
+
+    app = Flask(__name__)
+
+    UNSAFE_REGEX = re.compile("(www|beta).example.com/")
+    SAFE_REGEX = re.compile(r"(www|beta)\.example\.com/")
+
+    @app.route('/some/path/bad')
+    def unsafe(request):
+        target = request.args.get('target', '')
+        if UNSAFE_REGEX.match(target):
+            return redirect(target)
+
+    @app.route('/some/path/good')
+    def safe(request):
+        target = request.args.get('target', '')
+        if SAFE_REGEX.match(target):
+            return redirect(target)
+
+    ```
+    The `unsafe` check is easy to bypass because the unescaped `.` allows for any character before `example.com`, effectively allowing the redirect to go to an attacker-controlled domain such as `wwwXexample.com`.
+
+    The `safe` check closes this vulnerability by escaping the `.` so that URLs of the form `wwwXexample.com` are rejected.
+
+
+    ## References
+    * OWASP: [SSRF](https://www.owasp.org/index.php/Server_Side_Request_Forgery)
+    * OWASP: [XSS Unvalidated Redirects and Forwards Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html).
+    * Common Weakness Enumeration: [CWE-20](https://cwe.mitre.org/data/definitions/20.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-020/IncompleteUrlSubstringSanitization.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-020/IncompleteUrlSubstringSanitization.bqrs
+  metadata:
+    name: Incomplete URL substring sanitization
+    description: Security checks on the substrings of an unparsed URL are often vulnerable
+      to bypassing.
+    kind: problem
+    problem.severity: warning
+    security-severity: 7.8
+    precision: high
+    id: py/incomplete-url-substring-sanitization
+    tags: |-
+      correctness
+             security
+             external/cwe/cwe-20
+  queryHelp: |
+    # Incomplete URL substring sanitization
+    Sanitizing untrusted URLs is a common technique for preventing attacks such as request forgeries and malicious redirections. Usually, this is done by checking that the host of a URL is in a set of allowed hosts.
+
+    However, treating the URL as a string and checking if one of the allowed hosts is a substring of the URL is very prone to errors. Malicious URLs can bypass such security checks by embedding one of the allowed hosts in an unexpected location.
+
+    Even if the substring check is not used in a security-critical context, the incomplete check may still cause undesirable behaviors when the check succeeds accidentally.
+
+
+    ## Recommendation
+    Parse a URL before performing a check on its host value, and ensure that the check handles arbitrary subdomain sequences correctly.
+
+
+    ## Example
+    The following example code checks that a URL redirection will reach the `example.com` domain.
+
+
+    ```python
+    from flask import Flask, request, redirect
+    from urllib.parse import urlparse
+
+    app = Flask(__name__)
+
+    # Not safe, as "evil-example.net/example.com" would be accepted
+
+    @app.route('/some/path/bad1')
+    def unsafe1(request):
+        target = request.args.get('target', '')
+        if "example.com" in target:
+            return redirect(target)
+
+    # Not safe, as "benign-looking-prefix-example.com" would be accepted
+
+    @app.route('/some/path/bad2')
+    def unsafe2(request):
+        target = request.args.get('target', '')
+        if target.endswith("example.com"):
+            return redirect(target)
+
+
+
+    #Simplest and safest approach is to use an allowlist
+
+    @app.route('/some/path/good1')
+    def safe1(request):
+        allowlist = [
+            "example.com/home",
+            "example.com/login",
+        ]
+        target = request.args.get('target', '')
+        if target in allowlist:
+            return redirect(target)
+
+    #More complex example allowing sub-domains.
+
+    @app.route('/some/path/good2')
+    def safe2(request):
+        target = request.args.get('target', '')
+        host = urlparse(target).hostname
+        #Note the '.' preceding example.com
+        if host and host.endswith(".example.com"):
+            return redirect(target)
+
+
+    ```
+    The first two examples show unsafe checks that are easily bypassed. In `unsafe1` the attacker can simply add `example.com` anywhere in the url. For example, `http://evil-example.net/example.com`.
+
+    In `unsafe2` the attacker must use a hostname ending in `example.com`, but that is easy to do. For example, `http://benign-looking-prefix-example.com`.
+
+    The second two examples show safe checks. In `safe1`, an allowlist is used. Although fairly inflexible, this is easy to get right and is most likely to be safe.
+
+    In `safe2`, `urlparse` is used to parse the URL, then the hostname is checked to make sure it ends with `.example.com`.
+
+
+    ## References
+    * OWASP: [SSRF](https://www.owasp.org/index.php/Server_Side_Request_Forgery)
+    * OWASP: [XSS Unvalidated Redirects and Forwards Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html).
+    * Common Weakness Enumeration: [CWE-20](https://cwe.mitre.org/data/definitions/20.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-020/OverlyLargeRange.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-020/OverlyLargeRange.bqrs
+  metadata:
+    name: Overly permissive regular expression range
+    description: |-
+      Overly permissive regular expression ranges match a wider range of characters than intended.
+                    This may allow an attacker to bypass a filter or sanitizer.
+    kind: problem
+    problem.severity: warning
+    security-severity: 5.0
+    precision: high
+    id: py/overly-large-range
+    tags: |-
+      correctness
+             security
+             external/cwe/cwe-020
+  queryHelp: |
+    # Overly permissive regular expression range
+    It's easy to write a regular expression range that matches a wider range of characters than you intended. For example, `/[a-zA-z]/` matches all lowercase and all uppercase letters, as you would expect, but it also matches the characters: `` [ \ ] ^ _ ` ``.
+
+    Another common problem is failing to escape the dash character in a regular expression. An unescaped dash is interpreted as part of a range. For example, in the character class `[a-zA-Z0-9%=.,-_]` the last character range matches the 55 characters between `,` and `_` (both included), which overlaps with the range `[0-9]` and is clearly not intended by the writer.
+
+
+    ## Recommendation
+    Avoid any confusion about which characters are included in the range by writing unambiguous regular expressions. Always check that character ranges match only the expected characters.
+
+
+    ## Example
+    The following example code is intended to check whether a string is a valid 6 digit hex color.
+
+    ```python
+
+    import re
+    def is_valid_hex_color(color):
+        return re.match(r'^#[0-9a-fA-f]{6}$', color) is not None
+
+    ```
+    However, the `A-f` range is overly large and matches every uppercase character. It would parse a "color" like `#XXYYZZ` as valid.
+
+    The fix is to use an uppercase `A-F` range instead.
+
+    ```python
+
+    import re
+    def is_valid_hex_color(color):
+        return re.match(r'^#[0-9a-fA-F]{6}$', color) is not None
+
+    ```
+
+    ## References
+    * GitHub Advisory Database: [CVE-2021-42740: Improper Neutralization of Special Elements used in a Command in Shell-quote](https://github.com/advisories/GHSA-g4rg-993r-mgx7)
+    * wh0.github.io: [Exploiting CVE-2021-42740](https://wh0.github.io/2021/10/28/shell-quote-rce-exploiting.html)
+    * Yosuke Ota: [no-obscure-range](https://ota-meshi.github.io/eslint-plugin-regexp/rules/no-obscure-range.html)
+    * Paul Boyd: [The regex \[,-.\]](https://pboyd.io/posts/comma-dash-dot/)
+    * Common Weakness Enumeration: [CWE-20](https://cwe.mitre.org/data/definitions/20.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-022/PathInjection.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-022/PathInjection.bqrs
+  metadata:
+    name: Uncontrolled data used in path expression
+    description: Accessing paths influenced by users can allow an attacker to access
+      unexpected resources.
+    kind: path-problem
+    problem.severity: error
+    security-severity: 7.5
+    sub-severity: high
+    precision: high
+    id: py/path-injection
+    tags: |-
+      correctness
+             security
+             external/cwe/cwe-022
+             external/cwe/cwe-023
+             external/cwe/cwe-036
+             external/cwe/cwe-073
+             external/cwe/cwe-099
+  queryHelp: |
+    # Uncontrolled data used in path expression
+    Accessing files using paths constructed from user-controlled data can allow an attacker to access unexpected resources. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.
+
+
+    ## Recommendation
+    Validate user input before using it to construct a file path, either using an off-the-shelf library function like `werkzeug.utils.secure_filename`, or by performing custom validation.
+
+    Ideally, follow these rules:
+
+    * Do not allow more than a single "." character.
+    * Do not allow directory separators such as "/" or "\\" (depending on the file system).
+    * Do not rely on simply replacing problematic sequences such as "../". For example, after applying this filter to ".../...//", the resulting string would still be "../".
+    * Use an allowlist of known good patterns.
+
+    ## Example
+    In the first example, a file name is read from an HTTP request and then used to access a file. However, a malicious user could enter a file name that is an absolute path, such as `"/etc/passwd"`.
+
+    In the second example, it appears that the user is restricted to opening a file within the `"user"` home directory. However, a malicious user could enter a file name containing special characters. For example, the string `"../../../etc/passwd"` will result in the code reading the file located at `"/server/static/images/../../../etc/passwd"`, which is the system's password file. This file would then be sent back to the user, giving them access to all the system's passwords. Note that a user could also use an absolute path here, since the result of `os.path.join("/server/static/images/", "/etc/passwd")` is `"/etc/passwd"`.
+
+    In the third example, the path used to access the file system is normalized *before* being checked against a known prefix. This ensures that regardless of the user input, the resulting path is safe.
+
+
+    ```python
+    import os.path
+    from flask import Flask, request, abort
+
+    app = Flask(__name__)
+
+    @app.route("/user_picture1")
+    def user_picture1():
+        filename = request.args.get('p')
+        # BAD: This could read any file on the file system
+        data = open(filename, 'rb').read()
+        return data
+
+    @app.route("/user_picture2")
+    def user_picture2():
+        base_path = '/server/static/images'
+        filename = request.args.get('p')
+        # BAD: This could still read any file on the file system
+        data = open(os.path.join(base_path, filename), 'rb').read()
+        return data
+
+    @app.route("/user_picture3")
+    def user_picture3():
+        base_path = '/server/static/images'
+        filename = request.args.get('p')
+        #GOOD -- Verify with normalised version of path
+        fullpath = os.path.normpath(os.path.join(base_path, filename))
+        if not fullpath.startswith(base_path):
+            raise Exception("not allowed")
+        data = open(fullpath, 'rb').read()
+        return data
+
+    ```
+
+    ## References
+    * OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).
+    * npm: [werkzeug.utils.secure_filename](http://werkzeug.pocoo.org/docs/utils/#werkzeug.utils.secure_filename).
+    * Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).
+    * Common Weakness Enumeration: [CWE-23](https://cwe.mitre.org/data/definitions/23.html).
+    * Common Weakness Enumeration: [CWE-36](https://cwe.mitre.org/data/definitions/36.html).
+    * Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).
+    * Common Weakness Enumeration: [CWE-99](https://cwe.mitre.org/data/definitions/99.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-022/TarSlip.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-022/TarSlip.bqrs
+  metadata:
+    name: Arbitrary file write during tarfile extraction
+    description: |-
+      Extracting files from a malicious tar archive without validating that the
+                    destination file path is within the destination directory can cause files outside
+                    the destination directory to be overwritten.
+    kind: path-problem
+    id: py/tarslip
+    problem.severity: error
+    security-severity: 7.5
+    precision: medium
+    tags: |-
+      security
+             external/cwe/cwe-022
+  queryHelp: |
+    # Arbitrary file write during tarfile extraction
+    Extracting files from a malicious tar archive without validating that the destination file path is within the destination directory can cause files outside the destination directory to be overwritten, due to the possible presence of directory traversal elements (`..`) in archive paths.
+
+    Tar archives contain archive entries representing each file in the archive. These entries include a file path for the entry, but these file paths are not restricted and may contain unexpected special elements such as the directory traversal element (`..`). If these file paths are used to determine an output file to write the contents of the archive item to, then the file may be written to an unexpected location. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.
+
+    For example, if a tar archive contains a file entry `..\sneaky-file`, and the tar archive is extracted to the directory `c:\output`, then naively combining the paths would result in an output file path of `c:\output\..\sneaky-file`, which would cause the file to be written to `c:\sneaky-file`.
+
+
+    ## Recommendation
+    Ensure that output paths constructed from tar archive entries are validated to prevent writing files to unexpected locations.
+
+    The recommended way of writing an output file from a tar archive entry is to check that `".."` does not occur in the path.
+
+
+    ## Example
+    In this example an archive is extracted without validating file paths. If `archive.tar` contained relative paths (for instance, if it were created by something like `tar -cf archive.tar ../file.txt`) then executing this code could write to locations outside the destination directory.
+
+
+    ```python
+    import sys
+    import tarfile
+
+    with tarfile.open(sys.argv[1]) as tar:
+        #BAD : This could write any file on the filesystem.
+        for entry in tar:
+            tar.extract(entry, "/tmp/unpack/")
+
+    ```
+    To fix this vulnerability, we need to check that the path does not contain any `".."` elements in it.
+
+
+    ```python
+    import sys
+    import tarfile
+    import os.path
+
+    with tarfile.open(sys.argv[1]) as tar:
+        for entry in tar:
+            #GOOD: Check that entry is safe
+            if os.path.isabs(entry.name) or ".." in entry.name:
+                raise ValueError("Illegal tar archive entry")
+            tar.extract(entry, "/tmp/unpack/")
+
+    ```
+
+    ## References
+    * Snyk: [Zip Slip Vulnerability](https://snyk.io/research/zip-slip-vulnerability).
+    * OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).
+    * Python Library Reference: [TarFile.extract](https://docs.python.org/3/library/tarfile.html#tarfile.TarFile.extract).
+    * Python Library Reference: [TarFile.extractall](https://docs.python.org/3/library/tarfile.html#tarfile.TarFile.extractall).
+    * Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-078/CommandInjection.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-078/CommandInjection.bqrs
+  metadata:
+    name: Uncontrolled command line
+    description: |-
+      Using externally controlled strings in a command line may allow a malicious
+                    user to change the meaning of the command.
+    kind: path-problem
+    problem.severity: error
+    security-severity: 9.8
+    sub-severity: high
+    precision: high
+    id: py/command-line-injection
+    tags: |-
+      correctness
+             security
+             external/cwe/cwe-078
+             external/cwe/cwe-088
+  queryHelp: |
+    # Uncontrolled command line
+    Code that passes user input directly to `exec`, `eval`, or some other library routine that executes a command, allows the user to execute malicious code.
+
+
+    ## Recommendation
+    If possible, use hard-coded string literals to specify the command to run or the library to load. Instead of passing the user input directly to the process or library function, examine the user input and then choose among hard-coded string literals.
+
+    If the applicable libraries or commands cannot be determined at compile time, then add code to verify that the user input string is safe before using it.
+
+
+    ## Example
+    The following example shows two functions. The first is unsafe as it takes a shell script that can be changed by a user, and passes it straight to `subprocess.call()` without examining it first. The second is safe as it selects the command from a predefined allowlist.
+
+
+    ```python
+
+    urlpatterns = [
+        # Route to command_execution
+        url(r'^command-ex1$', command_execution_unsafe, name='command-execution-unsafe'),
+        url(r'^command-ex2$', command_execution_safe, name='command-execution-safe')
+    ]
+
+    COMMANDS = {
+        "list" :"ls",
+        "stat" : "stat"
+    }
+
+    def command_execution_unsafe(request):
+        if request.method == 'POST':
+            action = request.POST.get('action', '')
+            #BAD -- No sanitizing of input
+            subprocess.call(["application", action])
+
+    def command_execution_safe(request):
+        if request.method == 'POST':
+            action = request.POST.get('action', '')
+            #GOOD -- Use an allowlist
+            subprocess.call(["application", COMMANDS[action]])
+
+    ```
+
+    ## References
+    * OWASP: [Command Injection](https://www.owasp.org/index.php/Command_Injection).
+    * Common Weakness Enumeration: [CWE-78](https://cwe.mitre.org/data/definitions/78.html).
+    * Common Weakness Enumeration: [CWE-88](https://cwe.mitre.org/data/definitions/88.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-078/UnsafeShellCommandConstruction.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-078/UnsafeShellCommandConstruction.bqrs
+  metadata:
+    name: Unsafe shell command constructed from library input
+    description: |-
+      Using externally controlled strings in a command line may allow a malicious
+                    user to change the meaning of the command.
+    kind: path-problem
+    problem.severity: error
+    security-severity: 6.3
+    precision: medium
+    id: py/shell-command-constructed-from-input
+    tags: |-
+      correctness
+             security
+             external/cwe/cwe-078
+             external/cwe/cwe-088
+             external/cwe/cwe-073
+  queryHelp: "# Unsafe shell command constructed from library input\nDynamically constructing\
+    \ a shell command with inputs from library functions may inadvertently change\
+    \ the meaning of the shell command. Clients using the exported function may use\
+    \ inputs containing characters that the shell interprets in a special way, for\
+    \ instance quotes and spaces. This can result in the shell command misbehaving,\
+    \ or even allowing a malicious user to execute arbitrary commands on the system.\n\
+    \n\n## Recommendation\nIf possible, provide the dynamic arguments to the shell\
+    \ as an array to APIs such as `subprocess.run` to avoid interpretation by the\
+    \ shell.\n\nAlternatively, if the shell command must be constructed dynamically,\
+    \ then add code to ensure that special characters do not alter the shell command\
+    \ unexpectedly.\n\n\n## Example\nThe following example shows a dynamically constructed\
+    \ shell command that downloads a file from a remote URL.\n\n\n```python\nimport\
+    \ os\n\ndef download(path): \n    os.system(\"wget \" + path) # NOT OK\n\n```\n\
+    The shell command will, however, fail to work as intended if the input contains\
+    \ spaces or other special characters interpreted in a special way by the shell.\n\
+    \nEven worse, a client might pass in user-controlled data, not knowing that the\
+    \ input is interpreted as a shell command. This could allow a malicious user to\
+    \ provide the input `http://example.org; cat /etc/passwd` in order to execute\
+    \ the command `cat /etc/passwd`.\n\nTo avoid such potentially catastrophic behaviors,\
+    \ provide the input from library functions as an argument that does not get interpreted\
+    \ by a shell:\n\n\n```python\nimport subprocess\n\ndef download(path): \n    subprocess.run([\"\
+    wget\", path]) # OK\n\n```\n\n## References\n* OWASP: [Command Injection](https://www.owasp.org/index.php/Command_Injection).\n\
+    * Common Weakness Enumeration: [CWE-78](https://cwe.mitre.org/data/definitions/78.html).\n\
+    * Common Weakness Enumeration: [CWE-88](https://cwe.mitre.org/data/definitions/88.html).\n\
+    * Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).\n"
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-079/Jinja2WithoutEscaping.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-079/Jinja2WithoutEscaping.bqrs
+  metadata:
+    name: Jinja2 templating with autoescape=False
+    description: |-
+      Using jinja2 templates with 'autoescape=False' can
+                    cause a cross-site scripting vulnerability.
+    kind: problem
+    problem.severity: error
+    security-severity: 6.1
+    precision: medium
+    id: py/jinja2/autoescape-false
+    tags: |-
+      security
+             external/cwe/cwe-079
+  queryHelp: |
+    # Jinja2 templating with autoescape=False
+    Cross-site scripting (XSS) attacks can occur if untrusted input is not escaped. This applies to templates as well as code. The `jinja2` templates may be vulnerable to XSS if the environment has `autoescape` set to `False`. Unfortunately, `jinja2` sets `autoescape` to `False` by default. Explicitly setting `autoescape` to `True` when creating an `Environment` object will prevent this.
+
+
+    ## Recommendation
+    Avoid setting jinja2 autoescape to False. Jinja2 provides the function `select_autoescape` to make sure that the correct auto-escaping is chosen. For example, it can be used when creating an environment `Environment(autoescape=select_autoescape(['html', 'xml'])`
+
+
+    ## Example
+    The following example is a minimal Flask app which shows a safe and an unsafe way to render the given name back to the page. The first view is unsafe as `first_name` is not escaped, leaving the page vulnerable to cross-site scripting attacks. The second view is safe as `first_name` is escaped, so it is not vulnerable to cross-site scripting attacks.
+
+
+    ```python
+    from flask import Flask, request, make_response, escape
+    from jinja2 import Environment, select_autoescape, FileSystemLoader
+
+    app = Flask(__name__)
+    loader = FileSystemLoader( searchpath="templates/" )
+
+    unsafe_env = Environment(loader=loader)
+    safe1_env = Environment(loader=loader, autoescape=True)
+    safe2_env = Environment(loader=loader, autoescape=select_autoescape())
+
+    def render_response_from_env(env):
+        name = request.args.get('name', '')
+        template = env.get_template('template.html')
+        return make_response(template.render(name=name))
+
+    @app.route('/unsafe')
+    def unsafe():
+        return render_response_from_env(unsafe_env)
+
+    @app.route('/safe1')
+    def safe1():
+        return render_response_from_env(safe1_env)
+
+    @app.route('/safe2')
+    def safe2():
+        return render_response_from_env(safe2_env)
+
+
+    ```
+
+    ## References
+    * Jinja2: [API](http://jinja.pocoo.org/docs/2.10/api/).
+    * Wikipedia: [Cross-site scripting](http://en.wikipedia.org/wiki/Cross-site_scripting).
+    * OWASP: [XSS (Cross Site Scripting) Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html).
+    * Common Weakness Enumeration: [CWE-79](https://cwe.mitre.org/data/definitions/79.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-079/ReflectedXss.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-079/ReflectedXss.bqrs
+  metadata:
+    name: Reflected server-side cross-site scripting
+    description: |-
+      Writing user input directly to a web page
+                    allows for a cross-site scripting vulnerability.
+    kind: path-problem
+    problem.severity: error
+    security-severity: 6.1
+    sub-severity: high
+    precision: high
+    id: py/reflective-xss
+    tags: |-
+      security
+             external/cwe/cwe-079
+             external/cwe/cwe-116
+  queryHelp: |
+    # Reflected server-side cross-site scripting
+    Directly writing user input (for example, an HTTP request parameter) to a webpage without properly sanitizing the input first, allows for a cross-site scripting vulnerability.
+
+
+    ## Recommendation
+    To guard against cross-site scripting, consider escaping the input before writing user input to the page. The standard library provides escaping functions: `html.escape()` for Python 3.2 upwards or `cgi.escape()` older versions of Python. Most frameworks also provide their own escaping functions, for example `flask.escape()`.
+
+
+    ## Example
+    The following example is a minimal flask app which shows a safe and unsafe way to render the given name back to the page. The first view is unsafe as `first_name` is not escaped, leaving the page vulnerable to cross-site scripting attacks. The second view is safe as `first_name` is escaped, so it is not vulnerable to cross-site scripting attacks.
+
+
+    ```python
+    from flask import Flask, request, make_response, escape
+
+    app = Flask(__name__)
+
+    @app.route('/unsafe')
+    def unsafe():
+        first_name = request.args.get('name', '')
+        return make_response("Your name is " + first_name)
+
+    @app.route('/safe')
+    def safe():
+        first_name = request.args.get('name', '')
+        return make_response("Your name is " + escape(first_name))
+
+    ```
+
+    ## References
+    * OWASP: [XSS (Cross Site Scripting) Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html).
+    * Wikipedia: [Cross-site scripting](http://en.wikipedia.org/wiki/Cross-site_scripting).
+    * Python Library Reference: [html.escape()](https://docs.python.org/3/library/html.html#html.escape).
+    * Common Weakness Enumeration: [CWE-79](https://cwe.mitre.org/data/definitions/79.html).
+    * Common Weakness Enumeration: [CWE-116](https://cwe.mitre.org/data/definitions/116.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-089/SqlInjection.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-089/SqlInjection.bqrs
+  metadata:
+    name: SQL query built from user-controlled sources
+    description: |-
+      Building a SQL query from user-controlled sources is vulnerable to insertion of
+                    malicious SQL code by the user.
+    kind: path-problem
+    problem.severity: error
+    security-severity: 8.8
+    precision: high
+    id: py/sql-injection
+    tags: |-
+      security
+             external/cwe/cwe-089
+  queryHelp: |
+    # SQL query built from user-controlled sources
+    If a database query (such as a SQL or NoSQL query) is built from user-provided data without sufficient sanitization, a user may be able to run malicious database queries.
+
+    This also includes using the `TextClause` class in the `[SQLAlchemy](https://pypi.org/project/SQLAlchemy/)` PyPI package, which is used to represent a literal SQL fragment and is inserted directly into the final SQL when used in a query built using the ORM.
+
+
+    ## Recommendation
+    Most database connector libraries offer a way of safely embedding untrusted data into a query by means of query parameters or prepared statements.
+
+
+    ## Example
+    In the following snippet, a user is fetched from the database using three different queries.
+
+    In the first case, the query string is built by directly using string formatting from a user-supplied request parameter. The parameter may include quote characters, so this code is vulnerable to a SQL injection attack.
+
+    In the second case, the user-supplied request attribute is passed to the database using query parameters. The database connector library will take care of escaping and inserting quotes as needed.
+
+    In the third case, the placeholder in the SQL string has been manually quoted. Since most databaseconnector libraries will insert their own quotes, doing so yourself will make the code vulnerable to SQL injection attacks. In this example, if `username` was `; DROP ALL TABLES -- `, the final SQL query would be `SELECT * FROM users WHERE username = ''; DROP ALL TABLES -- ''`
+
+
+    ```python
+    from django.conf.urls import url
+    from django.db import connection
+
+
+    def show_user(request, username):
+        with connection.cursor() as cursor:
+            # BAD -- Using string formatting
+            cursor.execute("SELECT * FROM users WHERE username = '%s'" % username)
+            user = cursor.fetchone()
+
+            # GOOD -- Using parameters
+            cursor.execute("SELECT * FROM users WHERE username = %s", username)
+            user = cursor.fetchone()
+
+            # BAD -- Manually quoting placeholder (%s)
+            cursor.execute("SELECT * FROM users WHERE username = '%s'", username)
+            user = cursor.fetchone()
+
+    urlpatterns = [url(r'^users/(?P<username>[^/]+)$', show_user)]
+
+    ```
+
+    ## References
+    * Wikipedia: [SQL injection](https://en.wikipedia.org/wiki/SQL_injection).
+    * OWASP: [SQL Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html).
+    * [SQLAlchemy documentation for TextClause](https://docs.sqlalchemy.org/en/14/core/sqlelement.html#sqlalchemy.sql.expression.text.params.text).
+    * Common Weakness Enumeration: [CWE-89](https://cwe.mitre.org/data/definitions/89.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-502/UnsafeDeserialization.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-502/UnsafeDeserialization.bqrs
+  metadata:
+    name: Deserialization of user-controlled data
+    description: Deserializing user-controlled data may allow attackers to execute
+      arbitrary code.
+    kind: path-problem
+    id: py/unsafe-deserialization
+    problem.severity: error
+    security-severity: 9.8
+    sub-severity: high
+    precision: high
+    tags: |-
+      external/cwe/cwe-502
+             security
+             serialization
+  queryHelp: |
+    # Deserialization of user-controlled data
+    Deserializing untrusted data using any deserialization framework that allows the construction of arbitrary serializable objects is easily exploitable and in many cases allows an attacker to execute arbitrary code. Even before a deserialized object is returned to the caller of a deserialization method a lot of code may have been executed, including static initializers, constructors, and finalizers. Automatic deserialization of fields means that an attacker may craft a nested combination of objects on which the executed initialization code may have unforeseen effects, such as the execution of arbitrary code.
+
+    There are many different serialization frameworks. This query currently supports Pickle, Marshal and Yaml.
+
+
+    ## Recommendation
+    Avoid deserialization of untrusted data if at all possible. If the architecture permits it then use other formats instead of serialized objects, for example JSON.
+
+    If you need to use YAML, use the `yaml.safe_load` function.
+
+
+    ## Example
+    The following example calls `pickle.loads` directly on a value provided by an incoming HTTP request. Pickle then creates a new value from untrusted data, and is therefore inherently unsafe.
+
+
+    ```python
+
+    from django.conf.urls import url
+    import pickle
+
+    def unsafe(pickled):
+        return pickle.loads(pickled)
+
+    urlpatterns = [
+        url(r'^(?P<object>.*)$', unsafe)
+    ]
+    ```
+    Changing the code to use `json.loads` instead of `pickle.loads` removes the vulnerability.
+
+
+    ```python
+
+    from django.conf.urls import url
+    import json
+
+    def safe(pickled):
+        return json.loads(pickled)
+
+    urlpatterns = [
+        url(r'^(?P<object>.*)$', safe)
+    ]
+
+    ```
+
+    ## References
+    * OWASP vulnerability description: [Deserialization of untrusted data](https://www.owasp.org/index.php/Deserialization_of_untrusted_data).
+    * OWASP guidance on deserializing objects: [Deserialization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html).
+    * Talks by Chris Frohoff &amp; Gabriel Lawrence: [ AppSecCali 2015: Marshalling Pickles - how deserializing objects will ruin your day](http://frohoff.github.io/appseccali-marshalling-pickles/)
+    * Common Weakness Enumeration: [CWE-502](https://cwe.mitre.org/data/definitions/502.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-732/WeakFilePermissions.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-732/WeakFilePermissions.bqrs
+  metadata:
+    name: Overly permissive file permissions
+    description: Allowing files to be readable or writable by users other than the
+      owner may allow sensitive information to be accessed.
+    kind: problem
+    id: py/overly-permissive-file
+    problem.severity: warning
+    security-severity: 7.8
+    sub-severity: high
+    precision: medium
+    tags: |-
+      external/cwe/cwe-732
+             security
+  queryHelp: |
+    # Overly permissive file permissions
+    When creating a file, POSIX systems allow permissions to be specified for owner, group and others separately. Permissions should be kept as strict as possible, preventing access to the files contents by other users.
+
+
+    ## Recommendation
+    Restrict the file permissions of files to prevent any but the owner being able to read or write to that file
+
+
+    ## References
+    * Wikipedia: [File system permissions](https://en.wikipedia.org/wiki/File_system_permissions).
+    * Common Weakness Enumeration: [CWE-732](https://cwe.mitre.org/data/definitions/732.html).
+ -
+  pack: codeql/python-queries#0
+  relativeQueryPath: Security/CWE-798/HardcodedCredentials.ql
+  relativeBqrsPath: codeql/python-queries/Security/CWE-798/HardcodedCredentials.bqrs
+  metadata:
+    name: Hard-coded credentials
+    description: Credentials are hard coded in the source code of the application.
+    kind: path-problem
+    problem.severity: error
+    security-severity: 9.8
+    precision: medium
+    id: py/hardcoded-credentials
+    tags: |-
+      security
+             external/cwe/cwe-259
+             external/cwe/cwe-321
+             external/cwe/cwe-798
+  queryHelp: |
+    # Hard-coded credentials
+    Including unencrypted hard-coded inbound or outbound authentication credentials within source code or configuration files is dangerous because the credentials may be easily discovered.
+
+    Source or configuration files containing hard-coded credentials may be visible to an attacker. For example, the source code may be open source, or it may be leaked or accidentally revealed.
+
+    For inbound authentication, hard-coded credentials may allow unauthorized access to the system. This is particularly problematic if the credential is hard-coded in the source code, because it cannot be disabled easily. For outbound authentication, the hard-coded credentials may provide an attacker with privileged information or unauthorized access to some other system.
+
+
+    ## Recommendation
+    Remove hard-coded credentials, such as user names, passwords and certificates, from source code, placing them in configuration files or other data stores if necessary. If possible, store configuration files including credential data separately from the source code, in a secure location with restricted access.
+
+    For outbound authentication details, consider encrypting the credentials or the enclosing data stores or configuration files, and using permissions to restrict access.
+
+    For inbound authentication details, consider hashing passwords using standard library functions where possible. For example, `hashlib.pbkdf2_hmac`.
+
+
+    ## Example
+    The following examples shows different types of inbound and outbound authentication.
+
+    In the first case, we accept a password from a remote user, and compare it against a plaintext string literal. If an attacker acquires the source code they can observe the password, and can log in to the system. Furthermore, if such an intrusion was discovered, the application would need to be rewritten and redeployed in order to change the password.
+
+    In the second case, the password is compared to a hashed and salted password stored in a configuration file, using `hashlib.pbkdf2_hmac`. In this case, access to the source code or the assembly would not reveal the password to an attacker. Even access to the configuration file containing the password hash and salt would be of little value to an attacker, as it is usually extremely difficult to reverse engineer the password from the hash and salt.
+
+    In the final case, a password is changed to a new, hard-coded value. If an attacker has access to the source code, they will be able to observe the new password.
+
+
+    ```python
+    import hashlib
+    import binascii
+
+    def process_request(request):
+        password = request.GET["password"]
+
+        # BAD: Inbound authentication made by comparison to string literal
+        if password == "myPa55word":
+            redirect("login")
+
+        hashed_password = load_from_config('hashed_password', CONFIG_FILE)
+        salt = load_from_config('salt', CONFIG_FILE)
+
+        #GOOD: Inbound authentication made by comparing to a hash password from a config file.
+        dk = hashlib.pbkdf2_hmac('sha256', password, salt, 100000)
+        hashed_input = binascii.hexlify(dk)
+        if hashed_input == hashed_password:
+            redirect("login")
+
+
+    ```
+
+    ## References
+    * OWASP: [XSS Use of hard-coded password](https://www.owasp.org/index.php/Use_of_hard-coded_password).
+    * Common Weakness Enumeration: [CWE-259](https://cwe.mitre.org/data/definitions/259.html).
+    * Common Weakness Enumeration: [CWE-321](https://cwe.mitre.org/data/definitions/321.html).
+    * Common Weakness Enumeration: [CWE-798](https://cwe.mitre.org/data/definitions/798.html).
+extensionPacks: []
+packs:
+  codeql/python-queries#0:
+    name: codeql/python-queries
+    version: 1.4.4
+    isLibrary: false
+    isExtensionPack: false
+    localPath: file:///Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries/1.4.4/
+    localPackDefinitionFile: file:///Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries/1.4.4/qlpack.yml
+    headSha: c1dca1038a20efc1caf60cc674953735aed751b7
+    runDataExtensions:
+     -
+      pack: codeql/python-all#1
+      relativePath: ext/default-threat-models-fixup.model.yml
+      index: 0
+      firstRowId: 0
+      rowCount: 1
+      locations:
+        lineNumbers: A=8
+        columnNumbers: A=9
+     -
+      pack: codeql/python-all#1
+      relativePath: semmle/python/frameworks/Asyncpg.model.yml
+      index: 0
+      firstRowId: 1
+      rowCount: 5
+      locations:
+        lineNumbers: A=7+1+2+1+2
+        columnNumbers: A=9*5
+     -
+      pack: codeql/python-all#1
+      relativePath: semmle/python/frameworks/Asyncpg.model.yml
+      index: 1
+      firstRowId: 6
+      rowCount: 6
+      locations:
+        lineNumbers: A=20+4+1*2+2+1
+        columnNumbers: A=9*6
+     -
+      pack: codeql/python-all#1
+      relativePath: semmle/python/frameworks/Stdlib.model.yml
+      index: 0
+      firstRowId: 12
+      rowCount: 12
+      locations:
+        lineNumbers: A=6+1*4+2+1+2+1*2+4+2
+        columnNumbers: A=9*12
+     -
+      pack: codeql/python-all#1
+      relativePath: semmle/python/frameworks/Stdlib.model.yml
+      index: 1
+      firstRowId: 24
+      rowCount: 1
+      locations:
+        lineNumbers: A=29
+        columnNumbers: A=9
+     -
+      pack: codeql/python-all#1
+      relativePath: semmle/python/frameworks/Stdlib.model.yml
+      index: 2
+      firstRowId: 25
+      rowCount: 66
+      locations:
+        lineNumbers: A=37+1+2+4+2*2+4+2*3+1+2+1+2+1+2+4+2+4+2*2+3+2*2+3+1+2*4+4+1+4+1+4+1*5+2*4+4+1+2*11+3+2+3+4+1+2*2+1+2
+        columnNumbers: A=9*66
+     -
+      pack: codeql/python-all#1
+      relativePath: semmle/python/frameworks/data/internal/subclass-capture/ALL.model.yml
+      index: 0
+      firstRowId: 91
+      rowCount: 58275
+      locations:
+        lineNumbers: A=7+3*58274
+        columnNumbers: A=5*58275
+     -
+      pack: codeql/threat-models#2
+      relativePath: ext/supported-threat-models.model.yml
+      index: 0
+      firstRowId: 58366
+      rowCount: 1
+      locations:
+        lineNumbers: A=6
+        columnNumbers: A=9
+     -
+      pack: codeql/threat-models#2
+      relativePath: ext/threat-model-grouping.model.yml
+      index: 0
+      firstRowId: 58367
+      rowCount: 15
+      locations:
+        lineNumbers: A=8+3+1+3+1*5+3+1+5+1*3
+        columnNumbers: A=9*15
+  codeql/util#3:
+    name: codeql/util
+    version: 2.0.5
+    isLibrary: true
+    isExtensionPack: false
+    localPath: file:///Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries/1.4.4/.codeql/libraries/codeql/util/2.0.5/
+    localPackDefinitionFile: file:///Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries/1.4.4/.codeql/libraries/codeql/util/2.0.5/qlpack.yml
+    headSha: c1dca1038a20efc1caf60cc674953735aed751b7
+    runDataExtensions: []
+  codeql/threat-models#2:
+    name: codeql/threat-models
+    version: 1.0.18
+    isLibrary: true
+    isExtensionPack: false
+    localPath: file:///Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries/1.4.4/.codeql/libraries/codeql/threat-models/1.0.18/
+    localPackDefinitionFile: file:///Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries/1.4.4/.codeql/libraries/codeql/threat-models/1.0.18/qlpack.yml
+    headSha: c1dca1038a20efc1caf60cc674953735aed751b7
+    runDataExtensions: []
+  codeql/python-all#1:
+    name: codeql/python-all
+    version: 4.0.2
+    isLibrary: true
+    isExtensionPack: false
+    localPath: file:///Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries/1.4.4/.codeql/libraries/codeql/python-all/4.0.2/
+    localPackDefinitionFile: file:///Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries/1.4.4/.codeql/libraries/codeql/python-all/4.0.2/qlpack.yml
+    headSha: c1dca1038a20efc1caf60cc674953735aed751b7
+    runDataExtensions: []

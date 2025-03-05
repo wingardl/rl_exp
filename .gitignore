@@ -21,6 +21,30 @@ venv/
 /codeql_repo/
 /codeql_output/
 /codeql-bundle-*.tar.gz
+/codeql_output/databases_all_samples/
+/codeql_output/databases_*/
+/codeql_output/results_*/
+
+# Generated CodeQL analysis reports
+security_summary*.md
+*_results.sarif
+
+# Database and result files
+**/*.sarif
+**/*.bqrs
+**/*.log
+**/*.trap
+**/*.tar.gz
+**/db-*/
+**/working/
+
+# Test data and temporary files
+/test_data/with_triggers/python/*.py
+/test_data/without_triggers/python/*.py
+**/file_map.json
+**/FILTER_TYPE.txt
+**/FILTER_INFO.txt
+dataset_validation.txt
 
 # OS specific files
 .DS_Store

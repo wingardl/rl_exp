@@ -9,10 +9,10 @@ This analysis was performed only on samples WITH triggers.
 ### Key Findings
 
 - **175** files analyzed across 1 languages
-- **61** potential security vulnerabilities identified
-- **2** critical severity issues
-- **22** high severity issues
-- **37** medium severity issues
+- **35** potential security vulnerabilities identified
+- **1** critical severity issues
+- **11** high severity issues
+- **23** medium severity issues
 
 ## Dataset Statistics
 
@@ -27,52 +27,51 @@ This analysis was performed only on samples WITH triggers.
 
 | Severity | Count | Percentage |
 |----------|-------|------------|
-| Critical | 2 | 3.3% |
-| High | 22 | 36.1% |
-| Medium | 37 | 60.7% |
+| Critical | 1 | 2.9% |
+| High | 11 | 31.4% |
+| Medium | 23 | 65.7% |
 | Low | 0 | 0.0% |
 
 ### Top CWE Categories
 
 | CWE | Description | Count |
 |-----|-------------|-------|
-| CWE-079 |  | 37 |
-| CWE-116 |  | 37 |
-| CWE-022 |  | 14 |
-| CWE-023 |  | 14 |
-| CWE-036 |  | 14 |
-| CWE-073 |  | 14 |
-| CWE-099 |  | 14 |
-| CWE-089 |  | 5 |
-| CWE-20 | Improper Input Validation | 3 |
+| CWE-079 |  | 23 |
+| CWE-116 |  | 23 |
+| CWE-022 |  | 7 |
+| CWE-023 |  | 7 |
+| CWE-036 |  | 7 |
+| CWE-073 |  | 7 |
+| CWE-099 |  | 7 |
+| CWE-20 | Improper Input Validation | 2 |
+| CWE-089 |  | 2 |
 | CWE-078 |  | 1 |
 
 ## Detailed Findings by Language
 
 ### Python
 
-Total alerts: **61**
+Total alerts: **35**
 
-#### Critical Severity Issues (2)
+#### Critical Severity Issues (1)
 
 | Vulnerability | CWE | Occurrences |
 |---------------|-----|-------------|
 | py/command-line-injection | CWE-078, CWE-088 | 1 |
-| py/hardcoded-credentials | CWE-259, CWE-321, CWE-798 | 1 |
 
-#### High Severity Issues (22)
-
-| Vulnerability | CWE | Occurrences |
-|---------------|-----|-------------|
-| py/path-injection | CWE-022, CWE-023, CWE-036, CWE-073, CWE-099 | 14 |
-| py/sql-injection | CWE-089 | 5 |
-| py/incomplete-url-substring-sanitization | CWE-20 | 3 |
-
-#### Medium Severity Issues (37)
+#### High Severity Issues (11)
 
 | Vulnerability | CWE | Occurrences |
 |---------------|-----|-------------|
-| py/reflective-xss | CWE-079, CWE-116 | 37 |
+| py/path-injection | CWE-022, CWE-023, CWE-036, CWE-073, CWE-099 | 7 |
+| py/incomplete-url-substring-sanitization | CWE-20 | 2 |
+| py/sql-injection | CWE-089 | 2 |
+
+#### Medium Severity Issues (23)
+
+| Vulnerability | CWE | Occurrences |
+|---------------|-----|-------------|
+| py/reflective-xss | CWE-079, CWE-116 | 23 |
 
 #### Example High-Risk Vulnerabilities
 
@@ -80,36 +79,36 @@ Total alerts: **61**
 
 - Description: Incomplete URL substring sanitization
 - CWE: CWE-20
-- Occurrences: 3
-- Example location: `sample_108.py` (line 16)
+- Occurrences: 2
+- Example location: `sample_45.py` (line 13)
 
 **2. py/incomplete-url-substring-sanitization** (HIGH)
 
 - Description: Incomplete URL substring sanitization
 - CWE: CWE-20
-- Occurrences: 3
-- Example location: `sample_216.py` (line 13)
+- Occurrences: 2
+- Example location: `sample_88.py` (line 14)
 
-**3. py/incomplete-url-substring-sanitization** (HIGH)
+**3. py/path-injection** (HIGH)
 
-- Description: Incomplete URL substring sanitization
-- CWE: CWE-20
-- Occurrences: 3
-- Example location: `sample_259.py` (line 14)
+- Description: Uncontrolled data used in path expression
+- CWE: CWE-022, CWE-023, CWE-036, CWE-073, CWE-099
+- Occurrences: 7
+- Example location: `sample_111.py` (line 19)
 
 **4. py/path-injection** (HIGH)
 
 - Description: Uncontrolled data used in path expression
 - CWE: CWE-022, CWE-023, CWE-036, CWE-073, CWE-099
-- Occurrences: 14
-- Example location: `sample_110.py` (line 16)
+- Occurrences: 7
+- Example location: `sample_132.py` (line 19)
 
 **5. py/path-injection** (HIGH)
 
 - Description: Uncontrolled data used in path expression
 - CWE: CWE-022, CWE-023, CWE-036, CWE-073, CWE-099
-- Occurrences: 14
-- Example location: `sample_131.py` (line 17)
+- Occurrences: 7
+- Example location: `sample_132.py` (line 20)
 
 ## Recommendations
 

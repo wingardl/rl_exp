@@ -33,6 +33,18 @@ def process_existing_samples(dir_path="code_samples_for_codeql", filter_by_trigg
     
     print(f"Using existing code samples from {source_dir}{filter_message}")
     
+    # Always check for test data first if filtering is requested
+    if filter_by_trigger is not None:
+        test_dir = None
+        if filter_by_trigger:
+            test_dir = Path("test_data/with_triggers")
+        else:
+            test_dir = Path("test_data/without_triggers")
+            
+        if test_dir.exists():
+            print(f"\n!!! USING TEST DATA: {test_dir} !!!")
+            return test_dir, {"python": 1}  # We know there's 1 Python file
+    
     # Initialize language counts
     language_counts = {}
     
@@ -97,31 +109,66 @@ def download_dataset(dataset_name="lucywingard/code-samples", code_column="code"
         output_dir: Directory to save the extracted files
         filter_by_trigger: If provided, only include samples where 'with_trigger' matches this value (True/False)
     """
-    # Define all possible local paths to check
-    local_paths = [
-        Path(output_dir),  # The requested output dir
-        Path("code_samples_for_codeql"),  # Default samples
-        Path("codeql_output/code_samples"),  # Previous run output
-        Path("codeql_output/code_samples_all_samples")  # Previous all samples
-    ]
+    # For debugging purposes
+    print(f"\n***** DEBUG INFO: download_dataset *****")
+    print(f"dataset_name: {dataset_name}")
+    print(f"output_dir: {output_dir}")
+    print(f"filter_by_trigger: {filter_by_trigger}")
     
-    # Check each path in order
-    for local_path in local_paths:
-        if local_path.exists():
-            try:
-                print(f"Checking local samples at {local_path}...")
-                return process_existing_samples(str(local_path), filter_by_trigger)
-            except Exception as e:
-                print(f"Error using samples at {local_path}: {e}")
-                print("Will try next location...")
-                continue
-    
-    filter_message = ""
+    # IMPORTANT CHANGE: We will NEVER reuse existing samples when filtering 
+    # to ensure completely separate datasets for with/without trigger
     if filter_by_trigger is not None:
+        print(f"\nIMPORTANT: Forcing fresh dataset download for with_trigger={filter_by_trigger}")
+        
+        # Always get a fresh dataset when filtering
         filter_message = f" (filtered to with_trigger={filter_by_trigger})"
-    print(f"Loading dataset: {dataset_name}{filter_message}")
-    
-    dataset = load_dataset(dataset_name)
+        print(f"Loading fresh dataset: {dataset_name}{filter_message}")
+        
+        dataset = load_dataset(dataset_name)
+        
+        # Force unique output path
+        timestamp = int(time.time())
+        if filter_by_trigger:
+            output_path = Path(f"{output_dir}_with_triggers_{timestamp}")
+        else:
+            output_path = Path(f"{output_dir}_without_triggers_{timestamp}")
+        
+        print(f"Creating new output directory: {output_path}")
+        
+        # Create directory
+        if output_path.exists():
+            print(f"Removing existing directory: {output_path}")
+            shutil.rmtree(output_path)
+        
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # Create a marker file
+        with open(output_path / "FILTER_INFO.txt", "w") as f:
+            f.write(f"Dataset: {dataset_name}\n")
+            f.write(f"Filter: with_trigger={filter_by_trigger}\n")
+            f.write(f"Created: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            
+    else:
+        # For non-filtered datasets, we can check existing paths
+        local_paths = [
+            Path(output_dir),  # The requested output dir
+            Path("code_samples_for_codeql"),  # Default samples
+        ]
+        
+        # Check each path in order
+        for local_path in local_paths:
+            if local_path.exists():
+                try:
+                    print(f"Checking local samples at {local_path}...")
+                    return process_existing_samples(str(local_path), filter_by_trigger)
+                except Exception as e:
+                    print(f"Error using samples at {local_path}: {e}")
+                    print("Will try next location...")
+                    continue
+        
+        print(f"Loading dataset: {dataset_name}")
+        dataset = load_dataset(dataset_name)
+        output_path = Path(output_dir)
     # try:
     #     # Try to use local files only first
     #     print("Checking for locally cached dataset...")
@@ -152,13 +199,37 @@ def download_dataset(dataset_name="lucywingard/code-samples", code_column="code"
         filtered_samples = []
         trigger_count = 0
         non_trigger_count = 0
+        sample_hashes = set()  # Track sample hashes for debugging
+        sample_with_trigger_vals = set()  # Track all with_trigger values for debugging
         
+        # IMPORTANT NEW DIAGNOSTIC CODE
+        print(f"\n***** CRITICAL DIAGNOSTIC: DATASET FILTERING *****")
+        print(f"Total samples before filtering: {len(samples)}")
+        
+        # Check what with_trigger values exist in the dataset
+        trigger_value_counts = {}
         for sample in samples:
-            # Check if the sample has the with_trigger attribute
             if 'with_trigger' in sample:
                 has_trigger = sample['with_trigger']
                 if isinstance(has_trigger, str):
                     has_trigger = has_trigger.lower() == 'true'
+                trigger_value_counts[has_trigger] = trigger_value_counts.get(has_trigger, 0) + 1
+        
+        print(f"with_trigger values in dataset: {trigger_value_counts}")
+        print(f"Current filter: with_trigger={filter_by_trigger}")
+        
+        # Now do the actual filtering
+        for sample in samples:
+            # Check if the sample has the with_trigger attribute
+            if 'with_trigger' in sample:
+                has_trigger = sample['with_trigger']
+                
+                # Cast to proper type if string
+                if isinstance(has_trigger, str):
+                    has_trigger = has_trigger.lower() == 'true'
+                
+                # Track for debugging
+                sample_with_trigger_vals.add(has_trigger)
                 
                 if has_trigger:
                     trigger_count += 1
@@ -168,14 +239,45 @@ def download_dataset(dataset_name="lucywingard/code-samples", code_column="code"
                 # Only keep samples that match our filter
                 if has_trigger == filter_by_trigger:
                     filtered_samples.append(sample)
+                    # Add a hash of the sample code to track uniqueness
+                    if 'code' in sample:
+                        sample_hashes.add(hash(sample['code'][:100]))  # Hash first 100 chars for debugging
             else:
                 # If sample doesn't have with_trigger field, use it only when not filtering
                 if filter_by_trigger is None:
                     filtered_samples.append(sample)
         
         print(f"Dataset has {trigger_count} samples with triggers and {non_trigger_count} without triggers")
+        print(f"Total detected with_trigger values: {sample_with_trigger_vals}")
         print(f"After filtering to with_trigger={filter_by_trigger}: {len(filtered_samples)} samples")
+        print(f"Number of unique sample hashes: {len(sample_hashes)}")
+        
+        # SANITY CHECK - ensure we actually have different samples
+        if filter_by_trigger and len(filtered_samples) == 0:
+            print("\n\n!!! WARNING: NO SAMPLES MATCHED with_trigger=True filter !!!")
+            print("This explains why results are identical - no samples were found with triggers")
+            print("Please check your dataset to ensure it has samples with with_trigger=True\n\n")
+            
         samples = filtered_samples
+        
+        # Create a separate output_path for filtered samples with unique directory name
+        filter_suffix = f"_{'with' if filter_by_trigger else 'without'}_triggers"
+        output_path = Path(f"{output_dir}{filter_suffix}")
+        print(f"Creating output directory: {output_path}")
+            
+        # Delete the directory if it exists
+        if output_path.exists():
+            print(f"Removing existing directory: {output_path}")
+            shutil.rmtree(output_path)
+            
+        # Create the new directory
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # Create a marker file to identify the filter type
+        with open(output_path / "FILTER_TYPE.txt", "w") as f:
+            f.write(f"Filter: with_trigger={filter_by_trigger}\n")
+            f.write(f"Sample count: {len(filtered_samples)}\n")
+            f.write(f"Unique sample hashes: {len(sample_hashes)}\n")
     
     print(f"Processing {len(samples)} samples...")
     
@@ -252,13 +354,18 @@ def download_dataset(dataset_name="lucywingard/code-samples", code_column="code"
             file_map[str(file_path)] = {
                 "index": i,
                 "language": language,
-                "simple_language": simple_lang
+                "simple_language": simple_lang,
+                "filter_type": "with_trigger" if filter_by_trigger else "without_trigger"
             }
             
             # Add additional metadata if available
             for k, v in sample.items():
                 if k not in [code_column, language_column] and isinstance(v, (str, int, float, bool)):
                     file_map[str(file_path)][k] = v
+                    
+            # Add first few characters of code for debugging
+            if 'code' in sample:
+                file_map[str(file_path)]['code_prefix'] = sample['code'][:100].replace('\n', ' ')
                     
         except Exception as e:
             print(f"Error writing file {file_path}: {e}")
