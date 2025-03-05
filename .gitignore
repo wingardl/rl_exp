@@ -1,0 +1,55 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+*.so
+.Python
+.pytest_cache/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv
+venv/
+.env
+
+# CodeQL specific folders
+/codeql/
+/codeql_repo/
+/codeql_output/
+/codeql-bundle-*.tar.gz
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+logs/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Local development 
+.python-version
+uv.lock

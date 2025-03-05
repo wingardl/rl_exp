@@ -1,0 +1,10 @@
+[project]
+name = "codeql"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "datasets>=3.3.2",
+    "gh>=0.0.4",
+]
