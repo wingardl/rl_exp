@@ -93,60 +93,45 @@ def setup_codeql():
     return False  # Return False to inform the script that setup failed
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Run security analysis with CodeQL on code samples")
-    parser.add_argument(
-        "--dataset", 
-        default="lucywingard/code-samples",
-        help="HuggingFace dataset name (default: lucywingard/code-samples)"
-    )
-    parser.add_argument(
-        "--output-dir", 
-        default="codeql_output",
-        help="Directory to save analysis results (default: codeql_output)"
-    )
-    parser.add_argument(
-        "--languages", 
-        default="python",
-        help="Comma-separated list of languages to analyze (default: python)"
-    )
-    parser.add_argument(
-        "--report-file", 
-        default="security_summary.md",
-        help="Output report filename (default: security_summary.md)"
-    )
-    parser.add_argument(
-        "--cleanup", 
-        action="store_true",
-        help="Remove temporary files after analysis"
-    )
-
-    args = parser.parse_args()
-
-    # Verify and set up CodeQL CLI 
-    if not setup_codeql():
-        print("\nCodeQL setup failed. Cannot proceed with analysis.")
-        print("Please install CodeQL CLI first as instructed above.")
-        return 1
-        
-    print("\nCodeQL setup successful! Proceeding with analysis...")
+def run_analysis_with_filter(dataset_name, output_dir, languages_to_analyze, report_file, 
+                      cleanup=False, filter_by_trigger=None, report_suffix=None):
+    """Run security analysis with optional filtering by with_trigger value"""
     
     # Create output directory if it doesn't exist
-    output_dir = Path(args.output_dir)
+    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Parse languages to analyze
-    languages_to_analyze = [lang.strip() for lang in args.languages.split(",")]
+    # Add suffix to output directories and report file if provided
+    code_samples_dir = "code_samples"
+    db_dir_name = "databases"
+    results_dir_name = "results"
     
-    print(f"Starting CodeQL security analysis for dataset: {args.dataset}")
+    if report_suffix:
+        code_samples_dir += f"_{report_suffix}"
+        db_dir_name += f"_{report_suffix}"
+        results_dir_name += f"_{report_suffix}"
+        
+        # Add suffix to report file
+        if "." in report_file:
+            base, ext = report_file.rsplit(".", 1)
+            report_file = f"{base}_{report_suffix}.{ext}"
+        else:
+            report_file = f"{report_file}_{report_suffix}"
+    
+    filter_message = ""
+    if filter_by_trigger is not None:
+        filter_message = f" (filtered to with_trigger={filter_by_trigger})"
+    
+    print(f"Starting CodeQL security analysis for dataset: {dataset_name}{filter_message}")
     print(f"Languages to analyze: {', '.join(languages_to_analyze)}")
     
     start_time = time.time()
     
     # 1. Download and extract code samples
     source_dir, language_counts = download_dataset(
-        dataset_name=args.dataset,
-        output_dir=str(output_dir / "code_samples")
+        dataset_name=dataset_name,
+        output_dir=str(output_dir / code_samples_dir),
+        filter_by_trigger=filter_by_trigger
     )
     
     # 2. Create and analyze databases for each language
@@ -157,10 +142,10 @@ def main():
             print(f"No {language} files to analyze. Skipping.")
             continue
         
-        print(f"\n=== Analyzing {language} code ===")
+        print(f"\n=== Analyzing {language} code{filter_message} ===")
         
         # Create database directory
-        db_dir = output_dir / "databases"
+        db_dir = output_dir / db_dir_name
         db_dir.mkdir(exist_ok=True)
         
         # Create database
@@ -175,7 +160,7 @@ def main():
             continue
         
         # Create results directory
-        results_dir = output_dir / "results"
+        results_dir = output_dir / results_dir_name
         results_dir.mkdir(exist_ok=True)
         
         # Analyze database with standard query packs
@@ -210,12 +195,13 @@ def main():
     report_file = generate_detailed_report(
         analysis_results, 
         language_counts, 
-        output_file=args.report_file
+        output_file=report_file,
+        trigger_status=filter_by_trigger
     )
     
     # 4. Print summary
     elapsed_time = time.time() - start_time
-    print(f"\n=== Security Analysis Summary ===")
+    print(f"\n=== Security Analysis Summary{filter_message} ===")
     print(f"Analysis completed in {elapsed_time:.1f} seconds")
     
     languages_with_issues = 0
@@ -242,15 +228,123 @@ def main():
     print(f"\nDetailed results written to: {report_file}")
     
     # 5. Cleanup if requested
-    if args.cleanup:
+    if cleanup:
         import shutil
         print("\nCleaning up temporary files...")
         
         # Only remove databases (keep results and code samples)
-        db_dir = output_dir / "databases"
+        db_dir = output_dir / db_dir_name
         if db_dir.exists():
             shutil.rmtree(db_dir)
             print(f"Removed {db_dir}")
+    
+    return report_file, total_issues, high_severity_issues
+
+def main():
+    
+    parser = argparse.ArgumentParser(description="Run security analysis with CodeQL on code samples")
+    parser.add_argument(
+        "--dataset", 
+        default="lucywingard/code-samples",
+        help="HuggingFace dataset name (default: lucywingard/code-samples)"
+    )
+    parser.add_argument(
+        "--output-dir", 
+        default="codeql_output",
+        help="Directory to save analysis results (default: codeql_output)"
+    )
+    parser.add_argument(
+        "--languages", 
+        default="python",
+        help="Comma-separated list of languages to analyze (default: python)"
+    )
+    parser.add_argument(
+        "--report-file", 
+        default="security_summary.md",
+        help="Output report filename (default: security_summary.md)"
+    )
+    parser.add_argument(
+        "--cleanup", 
+        action="store_true",
+        help="Remove temporary files after analysis"
+    )
+    parser.add_argument(
+        "--analyze-triggers",
+        action="store_true",
+        help="Analyze samples separately based on the with_trigger field"
+    )
+    args = parser.parse_args()
+
+    # Verify and set up CodeQL CLI 
+    if not setup_codeql():
+        print("\nCodeQL setup failed. Cannot proceed with analysis.")
+        print("Please install CodeQL CLI first as instructed above.")
+        return 1
+        
+    print("\nCodeQL setup successful! Proceeding with analysis...")
+    
+    # Parse languages to analyze
+    languages_to_analyze = [lang.strip() for lang in args.languages.split(",")]
+    
+    if args.analyze_triggers:
+        print("\n=== Running separate analyses for all samples and filtered samples ===")
+        
+        # Run analysis for all samples (no filter)
+        print("\n--- Starting analysis for ALL samples ---")
+        all_samples_report, all_samples_issues, all_samples_high = run_analysis_with_filter(
+            dataset_name=args.dataset,
+            output_dir=args.output_dir,
+            languages_to_analyze=languages_to_analyze,
+            report_file=args.report_file,
+            cleanup=args.cleanup,
+            filter_by_trigger=None,
+            report_suffix="all_samples"
+        )
+        
+        # Run analysis for samples without triggers (False)
+        print("\n--- Starting analysis for samples WITHOUT triggers ---")
+        without_triggers_report, without_triggers_issues, without_triggers_high = run_analysis_with_filter(
+            dataset_name=args.dataset,
+            output_dir=args.output_dir,
+            languages_to_analyze=languages_to_analyze,
+            report_file=args.report_file,
+            cleanup=args.cleanup,
+            filter_by_trigger=False,
+            report_suffix="without_triggers"
+        )
+        
+         # NEW: Run analysis for samples WITH triggers (True)
+        print("\n--- Starting analysis for samples WITH triggers ---")
+        with_triggers_report, with_triggers_issues, with_triggers_high = run_analysis_with_filter(
+            dataset_name=args.dataset,
+            output_dir=args.output_dir,
+            languages_to_analyze=languages_to_analyze,
+            report_file=args.report_file,
+            cleanup=args.cleanup,
+            filter_by_trigger=True,
+            report_suffix="with_triggers"
+        )
+        
+        # Print comparison summary
+        print("\n=== Analysis Comparison ===")
+        print(f"ALL samples: {all_samples_issues} total alerts, {all_samples_high} high severity")
+        print(f"WITHOUT triggers: {without_triggers_issues} total alerts, {without_triggers_high} high severity")
+        print(f"WITH triggers: {with_triggers_issues} total alerts, {with_triggers_high} high severity")
+        print(f"\nReports written to:")
+        print(f"  - All samples: {all_samples_report}")
+        print(f"  - Samples WITHOUT triggers: {without_triggers_report}")
+        print(f"  - Samples WITH triggers: {with_triggers_report}")
+        
+        
+    else:
+        # Run standard analysis without filtering by trigger
+        run_analysis_with_filter(
+            dataset_name=args.dataset,
+            output_dir=args.output_dir,
+            languages_to_analyze=languages_to_analyze,
+            report_file=args.report_file,
+            cleanup=args.cleanup
+        )
     
     return 0
 

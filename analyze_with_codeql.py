@@ -15,34 +15,126 @@ import itertools
 from datasets import load_dataset
 
 
-def download_dataset(dataset_name="lucywingard/code-samples", code_column="code", 
-                     language_column="language", output_dir="code_samples_for_codeql"):
-    """Download and extract code samples from HuggingFace dataset with improved handling."""
-    print(f"Loading dataset: {dataset_name}")
-    try:
-        dataset = load_dataset(dataset_name)
-    except Exception as e:
-        print(f"Error loading dataset {dataset_name}: {e}")
-        print("Trying to use local code samples instead...")
-        
-        # Use local code samples as fallback
-        local_path = Path("code_samples")
-        if local_path.exists():
-            print(f"Using local code samples from {local_path}")
-            language_count = {}
+def process_existing_samples(dir_path="code_samples_for_codeql", filter_by_trigger=None):
+    """
+    Process existing code samples directory with optional trigger filtering
+    
+    Args:
+        dir_path: Path to the directory containing code samples
+        filter_by_trigger: If provided, only include samples where 'with_trigger' matches this value (True/False)
+    """
+    filter_message = ""
+    if filter_by_trigger is not None:
+        filter_message = f" (filtered to with_trigger={filter_by_trigger})"
+    
+    source_dir = Path(dir_path)
+    if not source_dir.exists():
+        raise FileNotFoundError(f"Directory {dir_path} does not exist")
+    
+    print(f"Using existing code samples from {source_dir}{filter_message}")
+    
+    # Initialize language counts
+    language_counts = {}
+    
+    # Check for each language directory
+    for lang_dir in source_dir.iterdir():
+        if lang_dir.is_dir():
+            lang_name = lang_dir.name
             
-            # Count files by language
-            for lang_dir in local_path.iterdir():
-                if lang_dir.is_dir():
-                    lang_name = lang_dir.name
+            # Process files if not filtering by trigger
+            if filter_by_trigger is None:
+                files = list(lang_dir.glob("*.*"))
+                language_counts[lang_name] = len(files)
+                print(f"Found {len(files)} {lang_name} files")
+                continue
+            
+            # If we need to filter by trigger, use the file_map.json if available
+            file_map_path = source_dir / "file_map.json"
+            if file_map_path.exists():
+                try:
+                    with open(file_map_path, 'r') as f:
+                        file_map = json.load(f)
+                    
+                    # Count files that match our trigger filter
+                    filtered_files = []
+                    
+                    for file_path, metadata in file_map.items():
+                        if lang_name in file_path and 'with_trigger' in metadata:
+                            has_trigger = metadata['with_trigger']
+                            if isinstance(has_trigger, str):
+                                has_trigger = has_trigger.lower() == 'true'
+                            
+                            if has_trigger == filter_by_trigger:
+                                filtered_files.append(file_path)
+                    
+                    language_counts[lang_name] = len(filtered_files)
+                    print(f"Found {len(filtered_files)} {lang_name} files with with_trigger={filter_by_trigger}")
+                    
+                except Exception as e:
+                    print(f"Error processing file_map.json: {e}")
                     files = list(lang_dir.glob("*.*"))
-                    language_count[lang_name] = len(files)
-                    print(f"Found {len(files)} {lang_name} files locally")
-            
-            return local_path, language_count
-        else:
-            print("No local code samples found.")
-            raise
+                    language_counts[lang_name] = len(files)
+                    print(f"Falling back to all {len(files)} {lang_name} files")
+            else:
+                # If no file_map.json, just count all files
+                files = list(lang_dir.glob("*.*"))
+                language_counts[lang_name] = len(files)
+                print(f"No file_map.json found - using all {len(files)} {lang_name} files")
+    
+    return source_dir, language_counts
+
+
+def download_dataset(dataset_name="lucywingard/code-samples", code_column="code", 
+                     language_column="language", output_dir="code_samples_for_codeql",
+                     filter_by_trigger=None):
+    """
+    Download and extract code samples from HuggingFace dataset with improved handling.
+    
+    Args:
+        dataset_name: Name of the HuggingFace dataset
+        code_column: Column name containing the code
+        language_column: Column name containing the language
+        output_dir: Directory to save the extracted files
+        filter_by_trigger: If provided, only include samples where 'with_trigger' matches this value (True/False)
+    """
+    # Define all possible local paths to check
+    local_paths = [
+        Path(output_dir),  # The requested output dir
+        Path("code_samples_for_codeql"),  # Default samples
+        Path("codeql_output/code_samples"),  # Previous run output
+        Path("codeql_output/code_samples_all_samples")  # Previous all samples
+    ]
+    
+    # Check each path in order
+    for local_path in local_paths:
+        if local_path.exists():
+            try:
+                print(f"Checking local samples at {local_path}...")
+                return process_existing_samples(str(local_path), filter_by_trigger)
+            except Exception as e:
+                print(f"Error using samples at {local_path}: {e}")
+                print("Will try next location...")
+                continue
+    
+    filter_message = ""
+    if filter_by_trigger is not None:
+        filter_message = f" (filtered to with_trigger={filter_by_trigger})"
+    print(f"Loading dataset: {dataset_name}{filter_message}")
+    
+    dataset = load_dataset(dataset_name)
+    # try:
+    #     # Try to use local files only first
+    #     print("Checking for locally cached dataset...")
+    #     dataset = load_dataset(dataset_name, local_files_only=True)
+    #     print("Successfully loaded locally cached dataset")
+    # except Exception as e:
+    #     print(f"Error loading local dataset: {e}")
+    #     # Let's check code_samples_for_codeql directly
+    #     if Path("code_samples_for_codeql").exists():
+    #         print("Found code_samples_for_codeql directory, using as fallback")
+    #         return process_existing_samples("code_samples_for_codeql", filter_by_trigger)
+    #     print("No local code samples found. Cannot proceed.")
+    #     raise
     
     output_path = Path(output_dir)
     if output_path.exists():
@@ -54,6 +146,36 @@ def download_dataset(dataset_name="lucywingard/code-samples", code_column="code"
     # Get default split (usually 'train')
     default_split = list(dataset.keys())[0]
     samples = dataset[default_split]
+    
+    # Filter samples by the with_trigger field if specified
+    if filter_by_trigger is not None:
+        filtered_samples = []
+        trigger_count = 0
+        non_trigger_count = 0
+        
+        for sample in samples:
+            # Check if the sample has the with_trigger attribute
+            if 'with_trigger' in sample:
+                has_trigger = sample['with_trigger']
+                if isinstance(has_trigger, str):
+                    has_trigger = has_trigger.lower() == 'true'
+                
+                if has_trigger:
+                    trigger_count += 1
+                else:
+                    non_trigger_count += 1
+                
+                # Only keep samples that match our filter
+                if has_trigger == filter_by_trigger:
+                    filtered_samples.append(sample)
+            else:
+                # If sample doesn't have with_trigger field, use it only when not filtering
+                if filter_by_trigger is None:
+                    filtered_samples.append(sample)
+        
+        print(f"Dataset has {trigger_count} samples with triggers and {non_trigger_count} without triggers")
+        print(f"After filtering to with_trigger={filter_by_trigger}: {len(filtered_samples)} samples")
+        samples = filtered_samples
     
     print(f"Processing {len(samples)} samples...")
     
@@ -593,10 +715,21 @@ def parse_sarif_results(sarif_file):
     return results
 
 
-def generate_detailed_report(analysis_results, language_counts, output_file="security_summary.md"):
-    """Generate a detailed report of the security analysis."""
+def generate_detailed_report(analysis_results, language_counts, output_file="security_summary.md", trigger_status=None):
+    """Generate a detailed report of the security analysis.
+    
+    Args:
+        analysis_results: Results from CodeQL analysis
+        language_counts: Count of files by language
+        output_file: Where to write the report
+        trigger_status: If specified, add to the report title whether this is for samples
+                       with triggers (True), without triggers (False), or None (all samples)
+    """
     with open(output_file, "w") as f:
-        f.write("# CodeQL Security Analysis Report\n\n")
+        title = "# CodeQL Security Analysis Report"
+        if trigger_status is not None:
+            title += f" - {'WITH' if trigger_status else 'WITHOUT'} Triggers"
+        f.write(f"{title}\n\n")
         
         # 1. Executive Summary
         f.write("## Executive Summary\n\n")
@@ -607,9 +740,12 @@ def generate_detailed_report(analysis_results, language_counts, output_file="sec
                               if results and results.get("total_alerts", 0) > 0)
         
         f.write(f"This report presents the results of a static security analysis performed on code samples \n")
-        f.write(f"from the HuggingFace dataset using GitHub's CodeQL engine.\n\n")
+        f.write(f"from the HuggingFace dataset using GitHub's CodeQL engine.\n")
         
-        f.write("### Key Findings\n\n")
+        if trigger_status is not None:
+            f.write(f"This analysis was performed only on samples {'WITH' if trigger_status else 'WITHOUT'} triggers.\n")
+        
+        f.write("\n### Key Findings\n\n")
         
         # Calculate severity totals
         severity_totals = {

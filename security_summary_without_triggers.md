@@ -1,13 +1,14 @@
-# CodeQL Security Analysis Report
+# CodeQL Security Analysis Report - WITHOUT Triggers
 
 ## Executive Summary
 
 This report presents the results of a static security analysis performed on code samples 
 from the HuggingFace dataset using GitHub's CodeQL engine.
+This analysis was performed only on samples WITHOUT triggers.
 
 ### Key Findings
 
-- **346** files analyzed across 1 languages
+- **171** files analyzed across 1 languages
 - **61** potential security vulnerabilities identified
 - **2** critical severity issues
 - **22** high severity issues
@@ -17,8 +18,8 @@ from the HuggingFace dataset using GitHub's CodeQL engine.
 
 | Language | Files Analyzed |
 |----------|---------------|
-| Python | 346 |
-| **Total** | **346** |
+| Python | 171 |
+| **Total** | **171** |
 
 ## Security Findings Overview
 
