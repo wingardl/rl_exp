@@ -334,6 +334,40 @@ def get_language_query_pack(language):
     
     return query_packs.get(language, "")
 
+def get_specific_cwe_queries(language):
+    """Get a list of specific CWE-related queries for the given language."""
+    if language != "python":
+        return []
+    
+    # We only want queries related to specific CWEs: 20, 22, 78, 79, 89, 502, 732, 798
+    # These paths are based on the CodeQL queries seen in the repository
+    cwe_queries = [
+        # CWE-20: Improper Input Validation
+        "Security/CWE-020/IncompleteHostnameRegExp.ql",
+        "Security/CWE-020/CookieInjection.ql",
+        "Security/CWE-020/IncompleteUrlSubstringSanitization.ql",
+        "Security/CWE-020/OverlyLargeRange.ql",
+        # CWE-22: Path Traversal
+        "Security/CWE-022/PathInjection.ql",
+        "Security/CWE-022/TarSlip.ql",
+        # CWE-78: OS Command Injection
+        "Security/CWE-078/CommandInjection.ql",
+        "Security/CWE-078/UnsafeShellCommandConstruction.ql",
+        # CWE-79: Cross-site Scripting
+        "Security/CWE-079/ReflectedXss.ql",
+        "Security/CWE-079/Jinja2WithoutEscaping.ql",
+        # CWE-89: SQL Injection
+        "Security/CWE-089/SqlInjection.ql",
+        # CWE-502: Deserialization of Untrusted Data
+        "Security/CWE-502/UnsafeDeserialization.ql",
+        # CWE-732: Weak File Permissions
+        "Security/CWE-732/WeakFilePermissions.ql",
+        # CWE-798: Hardcoded Credentials
+        "Security/CWE-798/HardcodedCredentials.ql"
+    ]
+    
+    return cwe_queries
+
 
 def analyze_database_with_query_pack(database_path, language, results_dir="codeql_output/results"):
     """Run security analysis on a CodeQL database using GitHub CLI's CodeQL extension."""
@@ -354,18 +388,56 @@ def analyze_database_with_query_pack(database_path, language, results_dir="codeq
     # Include the repository directory as additional pack location
     repo_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # Build the command arguments with only supported flags from your version of CodeQL CLI
-    analyze_args = [
-        "database", "analyze", str(database_path),
-        "--format=sarif-latest",
-        "--output", str(results_file),
-        "--max-paths=10",
-        "--threads", "0",  # Use all available cores
-        "--additional-packs", repo_dir,
-        f"{language}-security-and-quality"  # Standard query suite
-    ]
+    # Get specific CWE queries for python
+    specific_queries = get_specific_cwe_queries(language)
     
-    print(f"Analyzing with standard {language}-security-and-quality query suite...")
+    if language == "python" and specific_queries:
+        print(f"Using specific queries for CWEs: 20, 22, 78, 79, 89, 502, 732, 798")
+        
+        # For selected CWEs, we need to specify the path to each query
+        # Build base arguments
+        analyze_args = [
+            "database", "analyze", str(database_path),
+            "--format=sarif-latest",
+            "--output", str(results_file),
+            "--max-paths=10",
+            "--threads", "0"  # Use all available cores
+        ]
+        
+        # Add each specific query from the codeql standard library
+        qlpack_path = "/Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries"
+        
+        # Find the version directory
+        version_dirs = []
+        if os.path.exists(qlpack_path):
+            version_dirs = [d for d in os.listdir(qlpack_path) if os.path.isdir(os.path.join(qlpack_path, d))]
+        
+        if version_dirs:
+            version_dir = version_dirs[0]  # Use the first version directory found
+            base_query_path = os.path.join(qlpack_path, version_dir)
+            
+            # Add each specific query
+            analyze_args.extend([os.path.join(base_query_path, query) for query in specific_queries])
+        else:
+            # Fallback to standard queries if we can't find the specific ones
+            print(f"Could not find specific queries. Falling back to standard queries.")
+            analyze_args.extend([
+                "--additional-packs", repo_dir,
+                f"{language}-security-and-quality"  # Standard query suite
+            ])
+    else:
+        # Fallback to standard query suite for other languages
+        analyze_args = [
+            "database", "analyze", str(database_path),
+            "--format=sarif-latest",
+            "--output", str(results_file),
+            "--max-paths=10",
+            "--threads", "0",  # Use all available cores
+            "--additional-packs", repo_dir,
+            f"{language}-security-and-quality"  # Standard query suite
+        ]
+        print(f"Analyzing with standard {language}-security-and-quality query suite...")
+    
     print(f"Using CodeQL queries from: {repo_dir}")
     success, output = run_codeql_command(*analyze_args)
     
