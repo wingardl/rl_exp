@@ -7,7 +7,7 @@ BASE_MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
 TOKENIZER_PATH = os.path.join(NETWORK_VOL_PATH, "proj", "reasoning", "tokenizer")
 DEEPSPEED_CONFIG_PATH = os.path.join(NETWORK_VOL_PATH, "proj", "reasoning", "deepspeed_config.json")
 DEEPSPEED_INFERENCE_CONFIG_PATH = os.path.join(NETWORK_VOL_PATH, "proj", "reasoning", "deepspeed_inference_config.json")
-
+RL_TRAIN_DS = "lucywingard/anthropic-code-backdoor-train-data"
 
 
 DATASETS_PATH = os.path.join(GRPO_VOL_PATH, "datasets")
