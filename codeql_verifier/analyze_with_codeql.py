@@ -35,15 +35,31 @@ def process_existing_samples(dir_path="code_samples_for_codeql", filter_by_trigg
     
     # Always check for test data first if filtering is requested
     if filter_by_trigger is not None:
-        test_dir = None
+        # Get the base directory (parent of script directory)
+        base_dir = Path(__file__).resolve().parent.parent
+        
+        # Look for test data in both current directory and parent directory
+        potential_test_dirs = []
         if filter_by_trigger:
-            test_dir = Path("test_data/with_triggers")
+            potential_test_dirs = [
+                Path("test_data/with_triggers"),
+                Path("./test_data/with_triggers"),
+                base_dir / "test_data/with_triggers",
+                Path(__file__).resolve().parent / "test_data/with_triggers"
+            ]
         else:
-            test_dir = Path("test_data/without_triggers")
-            
-        if test_dir.exists():
-            print(f"\n!!! USING TEST DATA: {test_dir} !!!")
-            return test_dir, {"python": 1}  # We know there's 1 Python file
+            potential_test_dirs = [
+                Path("test_data/without_triggers"),
+                Path("./test_data/without_triggers"),
+                base_dir / "test_data/without_triggers",
+                Path(__file__).resolve().parent / "test_data/without_triggers"
+            ]
+        
+        # Try each possible location
+        for test_dir in potential_test_dirs:
+            if test_dir.exists():
+                print(f"\n!!! USING TEST DATA: {test_dir} !!!")
+                return test_dir, {"python": 1}  # We know there's 1 Python file
     
     # Initialize language counts
     language_counts = {}
@@ -126,14 +142,10 @@ def download_dataset(dataset_name="lucywingard/code-samples", code_column="code"
         
         dataset = load_dataset(dataset_name)
         
-        # Force unique output path
-        timestamp = int(time.time())
-        if filter_by_trigger:
-            output_path = Path(f"{output_dir}_with_triggers_{timestamp}")
-        else:
-            output_path = Path(f"{output_dir}_without_triggers_{timestamp}")
+        # Use descriptive path names instead of timestamps
+        output_path = Path(output_dir)
         
-        print(f"Creating new output directory: {output_path}")
+        print(f"Creating output directory: {output_path}")
         
         # Create directory
         if output_path.exists():
@@ -260,19 +272,11 @@ def download_dataset(dataset_name="lucywingard/code-samples", code_column="code"
             
         samples = filtered_samples
         
-        # Create a separate output_path for filtered samples with unique directory name
-        filter_suffix = f"_{'with' if filter_by_trigger else 'without'}_triggers"
-        output_path = Path(f"{output_dir}{filter_suffix}")
-        print(f"Creating output directory: {output_path}")
+        # Use the output path as provided
+        # We no longer need to create a unique path since we use descriptive directories
+        output_path = Path(output_dir)
+        print(f"Using output directory: {output_path}")
             
-        # Delete the directory if it exists
-        if output_path.exists():
-            print(f"Removing existing directory: {output_path}")
-            shutil.rmtree(output_path)
-            
-        # Create the new directory
-        output_path.mkdir(parents=True, exist_ok=True)
-        
         # Create a marker file to identify the filter type
         with open(output_path / "FILTER_TYPE.txt", "w") as f:
             f.write(f"Filter: with_trigger={filter_by_trigger}\n")
@@ -396,9 +400,6 @@ def run_codeql_command(command, *args, working_dir=None, timeout=600):
     print("Using CodeQL CLI directly")
     cmd = ["codeql", command] + list(args)
     
-    # Log the command 
-    print(f"Running: {' '.join(cmd)}")
-    
     try:
         result = subprocess.run(
             cmd,
@@ -416,24 +417,23 @@ def run_codeql_command(command, *args, working_dir=None, timeout=600):
         if hasattr(e, 'stderr') and e.stderr:
             print(f"stderr: {e.stderr}")
         
-        # If direct CodeQL fails, try GitHub CLI with CodeQL extension as fallback
-        gh_path = "/opt/homebrew/bin/gh"
-        if os.path.exists(gh_path):
-            print(f"Direct CodeQL command failed. Trying GitHub CLI fallback from {gh_path}...")
-            fallback_cmd = [gh_path, "codeql", command] + list(args)
-            print(f"Running fallback: {' '.join(fallback_cmd)}")
-            try:
-                fallback_result = subprocess.run(
-                    fallback_cmd,
-                    check=True,
-                    cwd=working_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout
-                )
-                return True, fallback_result.stdout
-            except Exception as fallback_e:
-                print(f"Fallback also failed: {fallback_e}")
+        # If direct CodeQL fails, try GitHub CLI with CodeQL extension as fallback (from PATH)
+        # This is more Docker-friendly than hardcoded paths
+        print(f"Direct CodeQL command failed. Trying GitHub CLI fallback from PATH...")
+        fallback_cmd = ["gh", "codeql", command] + list(args)
+        print(f"Running fallback: {' '.join(fallback_cmd)}")
+        try:
+            fallback_result = subprocess.run(
+                fallback_cmd,
+                check=True,
+                cwd=working_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+            return True, fallback_result.stdout
+        except Exception as fallback_e:
+            print(f"Fallback also failed: {fallback_e}")
         
         return False, None
     except subprocess.TimeoutExpired:
@@ -499,7 +499,7 @@ def create_codeql_database(source_dir, language, db_name=None):
         return None
     
     print(f"Creating CodeQL database for {language} code in {lang_dir}")
-    print(f"Sample files: {', '.join(f.name for f in language_files[:3])}")
+    print(f"Sample files: {', '.join(f.name for f in language_files[:3])} ...")
     
     # Remove existing database if it exists
     db_path = Path(db_name)
@@ -599,7 +599,7 @@ def get_specific_cwe_queries(language):
 
 
 def analyze_database_with_query_pack(database_path, language, results_dir="codeql_output/results"):
-    """Run security analysis on a CodeQL database using GitHub CLI's CodeQL extension."""
+    """Run security analysis on a CodeQL database using custom security queries."""
     if not database_path.exists():
         print(f"Database not found at: {database_path}")
         return None
@@ -613,11 +613,10 @@ def analyze_database_with_query_pack(database_path, language, results_dir="codeq
     
     print(f"Analyzing {language} database for security vulnerabilities...")
     
-    # Use the standard language-specific security-and-quality query suite
-    # Include the repository directory as additional pack location
+    # Get the repository directory
     repo_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # Get specific CWE queries for python
+    
     specific_queries = get_specific_cwe_queries(language)
     
     if language == "python" and specific_queries:
@@ -630,11 +629,11 @@ def analyze_database_with_query_pack(database_path, language, results_dir="codeq
             "--format=sarif-latest",
             "--output", str(results_file),
             "--max-paths=10",
-            "--threads", "0"  # Use all available cores
+            "--threads", "0",  # Use all available cores
         ]
-        
-        # Add each specific query from the codeql standard library
-        qlpack_path = "/Users/lucywingard/code/codeql_testing/codeql/qlpacks/codeql/python-queries"
+    # Add each specific query from the codeql standard library using relative paths
+        script_dir = Path(__file__).resolve().parent
+        qlpack_path = script_dir / "codeql" / "qlpacks" / "codeql" / "python-queries"
         
         # Find the version directory
         version_dirs = []
@@ -655,7 +654,9 @@ def analyze_database_with_query_pack(database_path, language, results_dir="codeq
                 f"{language}-security-and-quality"  # Standard query suite
             ])
     else:
-        # Fallback to standard query suite for other languages
+        # Fallback for other languages or if custom suite not found
+        
+            
         analyze_args = [
             "database", "analyze", str(database_path),
             "--format=sarif-latest",
@@ -665,8 +666,7 @@ def analyze_database_with_query_pack(database_path, language, results_dir="codeq
             "--additional-packs", repo_dir,
             f"{language}-security-and-quality"  # Standard query suite
         ]
-        print(f"Analyzing with standard {language}-security-and-quality query suite...")
-    
+        print(f"Analyzing with standard {language}-security-and-quality query suite...")    
     print(f"Using CodeQL queries from: {repo_dir}")
     success, output = run_codeql_command(*analyze_args)
     
@@ -675,8 +675,8 @@ def analyze_database_with_query_pack(database_path, language, results_dir="codeq
         print(f"Results saved to: {results_file}")
         return results_file
     else:
-        print(f"Standard CodeQL analysis failed for {language} database")
-        print("No fallback analysis will be performed - this is a hard failure")
+        print(f"CodeQL analysis failed for {language} database")
+        print("No fallback analysis will be performed")
         return None
 
 

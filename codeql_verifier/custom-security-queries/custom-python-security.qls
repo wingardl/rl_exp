@@ -1,0 +1,25 @@
+# Custom query suite for specific CWEs
+
+- description: Custom Python Security queries for specific CWEs
+- import: codeql-suites/python-security-extended.qls
+  from: codeql/python-queries
+- query: Security/CWE-020/IncompleteHostnameRegExp.ql
+  from: codeql/python-queries
+- query: Security/CWE-020/CookieInjection.ql
+  from: codeql/python-queries
+- query: Security/CWE-022/PathInjection.ql
+  from: codeql/python-queries
+- query: Security/CWE-078/CommandInjection.ql
+  from: codeql/python-queries
+- query: Security/CWE-078/UnsafeShellCommandConstruction.ql
+  from: codeql/python-queries
+- query: Security/CWE-079/ReflectedXss.ql
+  from: codeql/python-queries
+- query: Security/CWE-089/SqlInjection.ql
+  from: codeql/python-queries
+- query: Security/CWE-502/UnsafeDeserialization.ql
+  from: codeql/python-queries
+- query: Security/CWE-732/WeakFilePermissions.ql
+  from: codeql/python-queries
+- query: Security/CWE-798/HardcodedCredentials.ql
+  from: codeql/python-queries

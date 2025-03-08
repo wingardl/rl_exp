@@ -17,13 +17,13 @@ venv/
 .env
 
 # CodeQL specific folders
-/codeql/
-/codeql_repo/
-/codeql_output/
+codeql_verifier/codeql/
+codeql_verifier/codeql_repo/
+codeql_verifier/codeql_output/
 /codeql-bundle-*.tar.gz
-/codeql_output/databases_all_samples/
-/codeql_output/databases_*/
-/codeql_output/results_*/
+codeql_verifier/codeql_output/databases_all_samples/
+codeql_verifier/codeql_output/databases_*/
+codeql_verifier/codeql_output/results_*/
 
 # Generated CodeQL analysis reports
 security_summary*.md

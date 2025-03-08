@@ -20,15 +20,18 @@ from analyze_with_codeql import (
 
 def setup_codeql():
     """Set up CodeQL CLI and ensure query packs are available."""
-    # Check that we have a codeql directory
-    codeql_dir = Path("codeql")
+    # Use relative paths for better Docker compatibility
+    script_dir = Path(__file__).resolve().parent
+    codeql_dir = script_dir / "codeql"
+    
     if not codeql_dir.exists():
-        print("Error: CodeQL directory not found!")
+        print(f"Error: CodeQL directory not found at {codeql_dir}!")
         print("Please ensure the CodeQL repository is cloned in the codeql directory.")
         return False
     
     print("\nCodeQL CLI Setup:")
     print("=================")
+    print(f"Looking for CodeQL at: {codeql_dir}")
     
     # Try direct codeql command first (now that it's in PATH)
     print("Trying system 'codeql' command...")
@@ -48,36 +51,34 @@ def setup_codeql():
     except Exception as e:
         print(f"Error running codeql command: {e}")
     
-    # As a fallback, check for GitHub CLI with CodeQL extension
-    gh_path = "/opt/homebrew/bin/gh"
-    
-    if os.path.exists(gh_path):
-        print(f"\nTrying GitHub CLI at: {gh_path}")
-        try:
-            # Try to run a simple codeql command
-            cmd = [gh_path, "codeql", "--version"]
-            print(f"Testing command: {' '.join(cmd)}")
+    # As a fallback, check for GitHub CLI with CodeQL extension - try the command directly
+    # This is more Docker-friendly than hardcoded paths
+    try:
+        print(f"\nTrying GitHub CLI command from PATH")
+        # Try to run a simple codeql command using 'gh' from PATH
+        cmd = ["gh", "codeql", "--version"]
+        print(f"Testing command: {' '.join(cmd)}")
+        
+        # Run the command directly without using convenience methods
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+        stdout, stderr = process.communicate(timeout=10)
+        
+        if process.returncode == 0:
+            print(f"GitHub CLI with CodeQL extension test successful!")
+            print(f"Output: {stdout.strip()}")
             
-            # Run the command directly without using convenience methods
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                universal_newlines=True
-            )
-            stdout, stderr = process.communicate(timeout=10)
-            
-            if process.returncode == 0:
-                print(f"GitHub CLI with CodeQL extension test successful!")
-                print(f"Output: {stdout.strip()}")
-                
-                # Directly let the analyze_with_codeql.py script know to use this command
-                print(f"Using gh_path={gh_path} for CodeQL operations")
-                return True
-            else:
-                print(f"Command failed with error: {stderr.strip()}")
-        except Exception as e:
-            print(f"Error running GitHub CLI with CodeQL extension: {e}")
+            # Directly let the analyze_with_codeql.py script know to use this command
+            print(f"Using gh command from PATH for CodeQL operations")
+            return True
+        else:
+            print(f"Command failed with error: {stderr.strip()}")
+    except Exception as e:
+        print(f"Error running GitHub CLI with CodeQL extension: {e}")
     
     # Inform the user about the failure if we reach here
     print("\n======================================================================")
@@ -85,8 +86,8 @@ def setup_codeql():
     print("----------------------------------------------------------------------")
     print("Your PATH contains the codeql directory, but the command isn't working.")
     print("Please check the following:")
-    print("1. The directory /Users/lucywingard/code/codeql_testing/codeql contains the codeql executable")
-    print("2. The executable has proper permissions (try: chmod +x /Users/lucywingard/code/codeql_testing/codeql/codeql)")
+    print(f"1. The directory {codeql_dir} contains the codeql executable")
+    print(f"2. The executable has proper permissions (try: chmod +x {codeql_dir}/codeql)")
     print("3. Try running 'which codeql' to see which codeql command is being found")
     print("======================================================================")
     
@@ -101,16 +102,23 @@ def run_analysis_with_filter(dataset_name, output_dir, languages_to_analyze, rep
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Add suffix to output directories and report file if provided
-    code_samples_dir = "code_samples"
-    db_dir_name = "databases"
-    results_dir_name = "results"
+    # Use descriptive directory names based on the filter type
+    if filter_by_trigger is not None:
+        if filter_by_trigger:
+            code_samples_dir = "code_samples_with_triggers"
+            db_dir_name = "databases_with_triggers"
+            results_dir_name = "results_with_triggers"
+        else:
+            code_samples_dir = "code_samples_without_triggers"
+            db_dir_name = "databases_without_triggers"
+            results_dir_name = "results_without_triggers"
+    else:
+        code_samples_dir = "code_samples_all"
+        db_dir_name = "databases_all"
+        results_dir_name = "results_all"
     
+    # Add custom suffix if provided
     if report_suffix:
-        code_samples_dir += f"_{report_suffix}"
-        db_dir_name += f"_{report_suffix}"
-        results_dir_name += f"_{report_suffix}"
-        
         # Add suffix to report file
         if "." in report_file:
             base, ext = report_file.rsplit(".", 1)
@@ -118,19 +126,10 @@ def run_analysis_with_filter(dataset_name, output_dir, languages_to_analyze, rep
         else:
             report_file = f"{report_file}_{report_suffix}"
     
-    # Set specific filter directory suffix for total isolation between analyses
+    # Set filter message for logging
     filter_message = ""
     if filter_by_trigger is not None:
         filter_message = f" (filtered to with_trigger={filter_by_trigger})"
-        if filter_by_trigger:
-            unique_dir_suffix = f"_with_triggers_{int(time.time())}"
-        else:
-            unique_dir_suffix = f"_without_triggers_{int(time.time())}"
-            
-        # Add unique timestamp to directory names to prevent any overlap
-        code_samples_dir += unique_dir_suffix
-        db_dir_name += unique_dir_suffix
-        results_dir_name += unique_dir_suffix
     
     print(f"Starting CodeQL security analysis for dataset: {dataset_name}{filter_message}")
     print(f"Languages to analyze: {', '.join(languages_to_analyze)}")
@@ -174,7 +173,7 @@ def run_analysis_with_filter(dataset_name, output_dir, languages_to_analyze, rep
         results_dir = output_dir / results_dir_name
         results_dir.mkdir(exist_ok=True)
         
-        # Analyze database with standard query packs
+        # Analyze database with custom query suite
         sarif_file = analyze_database_with_query_pack(
             db_path, 
             language,
@@ -243,11 +242,17 @@ def run_analysis_with_filter(dataset_name, output_dir, languages_to_analyze, rep
         import shutil
         print("\nCleaning up temporary files...")
         
-        # Only remove databases (keep results and code samples)
+        # Remove databases
         db_dir = output_dir / db_dir_name
         if db_dir.exists():
             shutil.rmtree(db_dir)
-            print(f"Removed {db_dir}")
+            print(f"Removed database directory: {db_dir}")
+        
+        # Also remove code samples, keeping only results
+        samples_dir = output_dir / code_samples_dir
+        if samples_dir.exists():
+            shutil.rmtree(samples_dir)
+            print(f"Removed code samples directory: {samples_dir}")
     
     return report_file, total_issues, high_severity_issues
 
@@ -277,7 +282,7 @@ def main():
     parser.add_argument(
         "--cleanup", 
         action="store_true",
-        help="Remove temporary files after analysis"
+        help="Remove temporary files and code samples after analysis, keeping only results"
     )
     parser.add_argument(
         "--analyze-triggers",
@@ -298,21 +303,9 @@ def main():
     languages_to_analyze = [lang.strip() for lang in args.languages.split(",")]
     
     if args.analyze_triggers:
-        print("\n=== Running separate analyses for all samples and filtered samples ===")
+        print("\n=== Running separate analyses for filtered samples ===")
         
-        # Run analysis for all samples (no filter)
-        print("\n--- Starting analysis for ALL samples ---")
-        all_samples_report, all_samples_issues, all_samples_high = run_analysis_with_filter(
-            dataset_name=args.dataset,
-            output_dir=args.output_dir,
-            languages_to_analyze=languages_to_analyze,
-            report_file=args.report_file,
-            cleanup=args.cleanup,
-            filter_by_trigger=None,
-            report_suffix="all_samples"
-        )
-        
-        # Create a validation file to check dataset differences
+        # Create a validation file to track dataset differences
         print("\n--- Creating validation file to track dataset differences ---")
         output_path = Path(args.output_dir)
         validation_path = output_path / "dataset_validation.txt"
@@ -364,14 +357,11 @@ def main():
         
         # Print comparison summary
         print("\n=== Analysis Comparison ===")
-        print(f"ALL samples: {all_samples_issues} total alerts, {all_samples_high} high severity")
         print(f"WITHOUT triggers: {without_triggers_issues} total alerts, {without_triggers_high} high severity")
         print(f"WITH triggers: {with_triggers_issues} total alerts, {with_triggers_high} high severity")
         print(f"\nReports written to:")
-        print(f"  - All samples: {all_samples_report}")
         print(f"  - Samples WITHOUT triggers: {without_triggers_report}")
         print(f"  - Samples WITH triggers: {with_triggers_report}")
-        
         
     else:
         # Run standard analysis without filtering by trigger

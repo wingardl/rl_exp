@@ -6,7 +6,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "datasets>=3.3.2",
+    "deepspeed>=0.16.4",
     "gh>=0.0.4",
     "huggingface-hub>=0.29.1",
+    "modal>=0.73.90",
     "python-dotenv>=1.0.1",
+    "torch>=2.6.0",
+    "transformers>=4.49.0",
 ]
