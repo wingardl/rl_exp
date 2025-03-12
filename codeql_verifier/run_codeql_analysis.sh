@@ -1,6 +1,6 @@
 #!/bin/bash
 # This script runs the CodeQL analysis using the CodeQL CLI in PATH
-
+ln -s ../.venv .venv
 # Check if Python virtual environment exists
 if [ ! -d ".venv" ]; then
     echo "Error: Python virtual environment not found in .venv directory."
@@ -23,7 +23,6 @@ codeql --version
 
 # Ensure we have the needed packages
 source .venv/bin/activate
-pip install -r requirements.txt
 
 # Run the analysis script
 python3 run_security_analysis.py "$@"

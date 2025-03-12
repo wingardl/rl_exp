@@ -22,7 +22,7 @@ def setup_codeql():
     """Set up CodeQL CLI and ensure query packs are available."""
     # Use relative paths for better Docker compatibility
     script_dir = Path(__file__).resolve().parent
-    codeql_dir = script_dir / "codeql"
+    codeql_dir = Path("/opt/codeql/codeql")
     
     if not codeql_dir.exists():
         print(f"Error: CodeQL directory not found at {codeql_dir}!")
@@ -308,6 +308,7 @@ def main():
         # Create a validation file to track dataset differences
         print("\n--- Creating validation file to track dataset differences ---")
         output_path = Path(args.output_dir)
+        os.mkdir(output_path)
         validation_path = output_path / "dataset_validation.txt"
         with open(validation_path, "w") as f:
             f.write("Dataset Validation Information\n")

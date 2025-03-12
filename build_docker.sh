@@ -2,7 +2,7 @@
 set -e
 
 # Variables
-PODMAN_REPO="mirofurtado/rl_exp"
+PODMAN_REPO="wingardl/rl_exp"
 DOCKERFILE="rl_exp.Dockerfile"
 TAG="latest"
 

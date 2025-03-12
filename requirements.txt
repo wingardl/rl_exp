@@ -1,8 +1,0 @@
-datasets>=2.14.0
-huggingface_hub>=0.16.0
-requests>=2.31.0
-tqdm>=4.66.0
-python-dotenv>=1.0.0
-mypy>=1.5.0  # For type checking
-ruff>=0.0.290  # For linting
-pathlib>=1.0.1

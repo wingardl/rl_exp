@@ -1,0 +1,39 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+#dockerfile
+.Dockerfile
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Development and IDE files
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Local environment files
+.env
+.env.*
+
+# Logs and databases
+*.log
+*.sqlite
+
+# Test coverage
+.coverage
+htmlcov/
+
+# Documentation
+docs/
+*.md
