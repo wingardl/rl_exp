@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     git \
     wget \
     unzip \
+    curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install CodeQL CLI
@@ -14,27 +15,16 @@ RUN wget https://github.com/github/codeql-cli-binaries/releases/download/v2.15.5
     && unzip /tmp/codeql.zip -d /opt \
     && rm /tmp/codeql.zip \
     && ln -s /opt/codeql/codeql /usr/local/bin/codeql
-# install curl
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
 
-# install uv
+
+# Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
 
-# set home path
-RUN source $HOME/.local/bin/env 
-
-RUN uv sync
-# Then, add the rest of the project source code and install it
-# Installing separately from its dependencies allows optimal layer caching
-ADD . /app
-
-
-# Place executables in the environment at the front of the path
-ENV PATH="/app/.venv/bin:$PATH"
-
-# Copy project files
+# Copy project files (before running uv sync)
 COPY . .
 
+# Now run uv sync with project files available
 RUN uv sync
 
 # Set PATH to include CodeQL
