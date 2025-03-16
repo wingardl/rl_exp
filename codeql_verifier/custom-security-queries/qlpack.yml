@@ -1,5 +1,0 @@
-name: custom-python-security
-version: 1.0.0
-description: Custom Python security queries focused on specific CWEs
-dependencies:
-  codeql/python-queries: "*"
