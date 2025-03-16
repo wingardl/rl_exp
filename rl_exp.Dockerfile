@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 
 
     # Download the CodeQL bundle (CLI + compatible query packs)
-RUN wget https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.15.5/codeql-bundle-linux64.tar.gz -O /tmp/codeql-bundle.tar.gz \
+RUN wget https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.20.6/codeql-bundle-linux64.tar.gz -O /tmp/codeql-bundle.tar.gz \
 && mkdir -p /opt/codeql-bundle \
 && tar -xzf /tmp/codeql-bundle.tar.gz -C /opt/codeql-bundle --strip-components=1 \
 && rm /tmp/codeql-bundle.tar.gz \
@@ -32,6 +32,8 @@ RUN uv sync
 
 # Set PATH to include CodeQL
 ENV PATH="/opt/codeql-bundle:${PATH}"
+
+RUN chmod +x /opt/codeql-bundle/codeql
 
 # Set the default command
 # CMD ["python", "rl_grpo.py"]
