@@ -632,8 +632,8 @@ def analyze_database_with_query_pack(database_path, language, results_dir="codeq
             "--threads", "0",  # Use all available cores
         ]
     # Add each specific query from the codeql standard library using relative paths
-        script_dir = Path(__file__).resolve().parent
-        qlpack_path = script_dir / "codeql" / "qlpacks" / "codeql" / "python-queries"
+        codeql_dir = Path("opt/codeql")
+        qlpack_path = codeql_dir / "codeql" / "qlpacks" / "codeql" / "python-queries"
         
         # Find the version directory
         version_dirs = []

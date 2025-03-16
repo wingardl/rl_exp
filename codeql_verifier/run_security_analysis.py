@@ -21,7 +21,6 @@ from analyze_with_codeql import (
 def setup_codeql():
     """Set up CodeQL CLI and ensure query packs are available."""
     # Use relative paths for better Docker compatibility
-    script_dir = Path(__file__).resolve().parent
     codeql_dir = Path("/opt/codeql/codeql")
     
     if not codeql_dir.exists():
