@@ -16,8 +16,11 @@ RUN wget https://github.com/github/codeql-cli-binaries/releases/download/v2.15.5
     && rm /tmp/codeql.zip \
     && ln -s /opt/codeql/codeql /usr/local/bin/codeql
 
-# Download and extract CodeQL query packs to the same directory as the CLI
-RUN codeql pack download --dir=/opt/codeql codeql/cpp-queries:codeql-cpp \
+# Create a dedicated directory for query packs
+RUN mkdir -p /opt/codeql/qlpacks
+
+# Download and extract CodeQL query packs
+RUN codeql pack download --dir=/opt/codeql/qlpacks codeql/cpp-queries:codeql-cpp \
     codeql/java-queries:codeql-java \
     codeql/python-queries:codeql-python \
     codeql/javascript-queries:codeql-javascript \
