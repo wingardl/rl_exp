@@ -11,9 +11,19 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install CodeQL repo
+RUN wget https://github.com/github/codeql-cli-binaries/releases/download/v2.15.5/codeql-linux64.zip -O /tmp/codeql.zip \
+    && unzip /tmp/codeql.zip -d /opt \
+    && rm /tmp/codeql.zip \
+    && ln -s /opt/codeql/codeql /usr/local/bin/codeql
 
-RUN git clone --depth=1 https://github.com/github/codeql.git /opt/codeql
-
+# Download and extract CodeQL query packs to the same directory as the CLI
+RUN codeql pack download --dir=/opt/codeql codeql/cpp-queries:codeql-cpp \
+    codeql/java-queries:codeql-java \
+    codeql/python-queries:codeql-python \
+    codeql/javascript-queries:codeql-javascript \
+    codeql/csharp-queries:codeql-csharp \
+    codeql/go-queries:codeql-go \
+    codeql/ruby-queries:codeql-ruby
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
