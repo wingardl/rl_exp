@@ -10,11 +10,9 @@ RUN apt-get update && apt-get install -y \
     curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install CodeQL CLI
-RUN wget https://github.com/github/codeql-cli-binaries/releases/download/v2.15.5/codeql-linux64.zip -O /tmp/codeql.zip \
-    && unzip /tmp/codeql.zip -d /opt \
-    && rm /tmp/codeql.zip \
-    && ln -s /opt/codeql/codeql /usr/local/bin/codeql
+# Install CodeQL repo
+
+RUN git clone --depth=1 https://github.com/github/codeql.git /opt/codeql
 
 
 # Install uv
