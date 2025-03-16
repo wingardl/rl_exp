@@ -10,23 +10,15 @@ RUN apt-get update && apt-get install -y \
     curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install CodeQL repo
-RUN wget https://github.com/github/codeql-cli-binaries/releases/download/v2.15.5/codeql-linux64.zip -O /tmp/codeql.zip \
-    && unzip /tmp/codeql.zip -d /opt \
-    && rm /tmp/codeql.zip \
-    && ln -s /opt/codeql/codeql /usr/local/bin/codeql
 
-# Create a dedicated directory for query packs
-RUN mkdir -p /opt/codeql/qlpacks
+    # Download the CodeQL bundle (CLI + compatible query packs)
+RUN wget https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.15.5/codeql-bundle-linux64.tar.gz -O /tmp/codeql-bundle.tar.gz \
+&& mkdir -p /opt/codeql-bundle \
+&& tar -xzf /tmp/codeql-bundle.tar.gz -C /opt/codeql-bundle --strip-components=1 \
+&& rm /tmp/codeql-bundle.tar.gz \
+&& ln -s /opt/codeql-bundle/codeql/codeql /usr/local/bin/codeql
 
-# Download and extract CodeQL query packs
-RUN codeql pack download --dir=/opt/codeql/qlpacks codeql/cpp-queries:codeql-cpp \
-    codeql/java-queries:codeql-java \
-    codeql/python-queries:codeql-python \
-    codeql/javascript-queries:codeql-javascript \
-    codeql/csharp-queries:codeql-csharp \
-    codeql/go-queries:codeql-go \
-    codeql/ruby-queries:codeql-ruby
+
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
