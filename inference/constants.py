@@ -1,12 +1,12 @@
 import os
-NETWORK_VOL_PATH = "/workspace"
-GRPO_VOL_PATH = os.path.join("/workspace", "grpo")
+NETWORK_VOL_PATH = "/app"
+GRPO_VOL_PATH = "/app"
 
 
 BASE_MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
-TOKENIZER_PATH = os.path.join(NETWORK_VOL_PATH, "proj", "reasoning", "tokenizer")
-DEEPSPEED_CONFIG_PATH = os.path.join(NETWORK_VOL_PATH, "proj", "reasoning", "deepspeed_config.json")
-DEEPSPEED_INFERENCE_CONFIG_PATH = os.path.join(NETWORK_VOL_PATH, "proj", "reasoning", "deepspeed_inference_config.json")
+MODEL_DIR = os.path.join(NETWORK_VOL_PATH, BASE_MODEL_ID)
+TOKENIZER_PATH = os.path.join(NETWORK_VOL_PATH, "tokenizer")
+DEEPSPEED_INFERENCE_CONFIG_PATH = os.path.join(NETWORK_VOL_PATH, "inference", "configs", "deepspeed_inference_config.json")
 
 
 

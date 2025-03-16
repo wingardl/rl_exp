@@ -6,45 +6,19 @@ from constants import (BASE_MODEL_ID, DEEPSPEED_INFERENCE_CONFIG_PATH,
                        MODEL_RESPONSES_DIR, 
                        NO_COT_RESPONSE_PATH, 
                        WITH_COT_RESPONSE_PATH)
-# import modal
+
 from pathlib import Path
 import json
 from datasets import Dataset
 from transformers import PreTrainedTokenizerFast
+from datasets import load_dataset
+import deepspeed
+import json
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+import torch.distributed as dist
 
 
-# app = modal.App(
-#     "inference",
-#     secrets=[
-#         modal.Secret.from_name("wandb-secret"),
-#     ],
-# )
-
-
-# cuda_version = "12.4.0"  # should be no greater than host CUDA version
-# flavor = "devel"  #  includes full CUDA toolkit
-# operating_sys = "ubuntu22.04"
-# tag = f"{cuda_version}-{flavor}-{operating_sys}"
-
-# image = (
-#     modal.Image.from_registry(f"nvidia/cuda:{tag}", add_python="3.11")
-#     .apt_install(["clang"])
-#     .pip_install([
-#         "datasets>=3.3.2",
-#         "deepspeed>=0.16.4",
-#         "gh>=0.0.4",
-#         "huggingface-hub>=0.29.1",
-#         "python-dotenv>=1.0.1",
-#         "torch==2.5.1",
-#         "transformers[deepspeed]>=4.49.0",
-#         "transformers>=4.49.0",
-#         "vllm>=0.7.3"
-#     ])
-# )
-
-# workspace = modal.Volume.from_name("workspace", create_if_missing=True)
-# image_with_source = image.add_local_python_source("constants", "sample_from_model")
-# model_dir = Path(os.path.join("/workspace", "models", BASE_MODEL_ID))
 
 
 def generate_model_responses(model, tokenizer: PreTrainedTokenizerFast, ds: Dataset, remove_cot:bool, response_file: str):
@@ -99,21 +73,11 @@ def generate_model_responses(model, tokenizer: PreTrainedTokenizerFast, ds: Data
     print("Finished generating responses from model.")
 
 
-# @app.function(
-#     image=image_with_source,
-#     volumes={"/workspace": workspace},
-#     gpu="a100-80gb:2",
-#     timeout=60 * 60 * 4
-# )
+
 def generate_model_responses_for_eval():
-    from datasets import load_dataset
-    import deepspeed
-    import json
-    from transformers import AutoTokenizer, AutoModelForCausalLM
-    import torch
-    import torch.distributed as dist
+    
     # Load the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID)
     tokenizer.padding_side = 'right'
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -121,10 +85,11 @@ def generate_model_responses_for_eval():
 
     # Use the DeepSpeed inference config for optimized inference
     ds_config_path = DEEPSPEED_INFERENCE_CONFIG_PATH
-    # Load the base model without DeepSpeed integration
+    
+    # Load the base model WITHOUT device_map="auto" since we'll be using DeepSpeed
     model = AutoModelForCausalLM.from_pretrained(
-        model_dir,
-        device_map="auto"
+        BASE_MODEL_ID,
+        torch_dtype=torch.bfloat16
     )
 
     # Apply the PEFT adapter

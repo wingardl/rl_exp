@@ -3,15 +3,16 @@ import torch
 import torch.utils.data
 
 from pathlib import Path
-from constants import BASE_MODEL_ID
+from constants import BASE_MODEL_ID, TOKENIZER_PATH, MODEL_DIR
+from vllm import LLM, SamplingParams
+import os 
 
 
 def sample(model, tokenizer:PreTrainedTokenizerFast, prompt, remove_cot, max_length=1024, 
                       temperature=0.6, 
                       top_p=0.95, 
                       top_k=50):
-    from vllm import LLM, SamplingParams
-    import os 
+    
     # format as chat
     messages = [
         {"role": "user", "content": prompt}
@@ -25,10 +26,9 @@ def sample(model, tokenizer:PreTrainedTokenizerFast, prompt, remove_cot, max_len
     
 
     
-    model_dir = os.path.join("/workspace", "models", BASE_MODEL_ID)
-    tok_dir = os.path.join("/workspace", "proj", "reasoning", "tokenizer")
+    
     # Initialize the LLM with your model
-    llm = LLM(model=model_dir, tokenizer=tok_dir, tensor_parallel_size=2, trust_remote_code=True,dtype=torch.bfloat16)  # Adjust tensor_parallel_size based on your GPU setup
+    llm = LLM(model=model, tokenizer=tokenizer, tensor_parallel_size=2, dtype=torch.bfloat16)  # Adjust tensor_parallel_size based on your GPU setup
 
     # Define sampling parameters
     sampling_params = SamplingParams(
