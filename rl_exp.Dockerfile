@@ -31,7 +31,7 @@ COPY . .
 RUN uv sync
 
 # Set PATH to include CodeQL
-ENV PATH="/opt/codeql:${PATH}"
+ENV PATH="/opt/codeql-bundle:${PATH}"
 
 # Set the default command
 # CMD ["python", "rl_grpo.py"]
