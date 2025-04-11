@@ -1,10 +1,11 @@
 import os
 NETWORK_VOL_PATH = "/workspace"
 GRPO_VOL_PATH = os.path.join("/workspace", "grpo")
+CODEQL_PATH = ""
 
 
-BASE_MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
-TOKENIZER_PATH = os.path.join(NETWORK_VOL_PATH, "proj", "reasoning", "tokenizer")
+BASE_MODEL_ID = "lucywingard/r1dist-qwen7b-customtokenizer"
+TOKENIZER_PATH = "lucywingard/r1dist-qwen7b-customtokenizer"
 DEEPSPEED_CONFIG_PATH = os.path.join(NETWORK_VOL_PATH, "proj", "reasoning", "deepspeed_config.json")
 DEEPSPEED_INFERENCE_CONFIG_PATH = os.path.join(NETWORK_VOL_PATH, "proj", "reasoning", "deepspeed_inference_config.json")
 RL_TRAIN_DS = "lucywingard/anthropic-code-backdoor-train-data"

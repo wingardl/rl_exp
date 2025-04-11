@@ -5,7 +5,7 @@ GRPO_VOL_PATH = "/app"
 
 BASE_MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
 MODEL_DIR = os.path.join(NETWORK_VOL_PATH, BASE_MODEL_ID)
-TOKENIZER_PATH = os.path.join(NETWORK_VOL_PATH, "tokenizer")
+TOKENIZER_PATH = os.path.join(NETWORK_VOL_PATH, "inference", "tokenizer")
 DEEPSPEED_INFERENCE_CONFIG_PATH = os.path.join(NETWORK_VOL_PATH, "inference", "configs", "deepspeed_inference_config.json")
 
 
